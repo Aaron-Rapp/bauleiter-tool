@@ -1,0 +1,86 @@
+BAUVERTRAG
+nach VOB/B
+
+Auftraggeber: Stadt Musterhausen, Hauptstraße 1, 78000 Musterhausen
+Auftragnehmer: Bauunternehmen Muster GmbH, Industriestraße 5, 78001 Musterstadt
+
+Datum: 01.03.2026
+
+======================================================================
+§ 1 — VERTRAGSGEGENSTAND
+======================================================================
+Gegenstand dieses Vertrages ist die Ausführung folgender Bauleistungen:
+
+Kanalbauarbeiten in der Lindenstraße, Abschnitt km 0+000 bis km 0+450
+einschließlich Straßenwiederherstellung in Asphalt.
+
+======================================================================
+§ 2 — LEISTUNGSUMFANG
+======================================================================
+Der Auftragnehmer schuldet folgende Leistungen:
+
+2.1 TIEFBAUARBEITEN
+- Oberbodenabtrag und Lagerung
+- Erdarbeiten: Aushub und Verfüllung des Kanalgraben
+- Verlegung Betonrohre DN 400, SN 10
+- Einbau von Schachtbauwerken (3 Stück)
+- Verdichtung des Grabens nach ZTVE-StB
+
+2.2 STRASSENWIEDERHERSTELLUNG
+- Einbau Frostschutzschicht 0/32, d=30 cm
+- Einbau Asphalttragschicht AC 22 T S, d=12 cm
+- Einbau Asphaltbinder AC 16 B N, d=6 cm
+- Einbau Asphaltdeckschicht AC 11 D N, d=4 cm
+
+2.3 NICHT IM LEISTUNGSUMFANG ENTHALTEN
+Folgende Leistungen sind ausdrücklich NICHT Bestandteil dieses Vertrages:
+- Baumfällarbeiten und Rodung (wird durch AG beauftragt)
+- Leitungsumverlegungen von Fremdleitungen
+- Kampfmittelräumung
+- Sicherung und Umbau bestehender Versorgungsleitungen
+- Abbruch und Entsorgung von Altleitungen außerhalb der Trasse
+
+======================================================================
+§ 3 — VERKEHRSSICHERUNG
+======================================================================
+Die Verkehrssicherung und Absperrung der Baustelle nach RSA 21 obliegt
+dem AUFTRAGGEBER. Der Auftraggeber beauftragt eine Verkehrssicherungsfirma
+und stellt die entsprechenden Schilder und Absperrungen.
+
+Der Auftragnehmer ist lediglich verpflichtet, die Arbeitsbereiche nach
+§ 5 DGUV-Vorschrift 38 zu sichern.
+
+======================================================================
+§ 4 — VERGÜTUNG
+======================================================================
+Auftragssumme netto: 285.000,00 €
+Mehrwertsteuer 19%: 54.150,00 €
+Auftragssumme brutto: 339.150,00 €
+
+Abrechnung nach tatsächlich ausgeführten Mengen gemäß § 2 Abs. 2 VOB/B.
+
+======================================================================
+§ 5 — AUSFÜHRUNGSFRISTEN
+======================================================================
+Baubeginn: 15.03.2026
+Fertigstellung: 30.05.2026
+Fertigstellung Deckschicht: 30.05.2026
+
+======================================================================
+§ 6 — BEHINDERUNGEN
+======================================================================
+Behinderungen durch Dritte (z.B. Leitungsträger, Baumfällarbeiten des AG)
+berechtigen den Auftragnehmer zu Bauzeitverlängerung und Nachtragsforderung
+gemäß § 6 VOB/B.
+
+======================================================================
+§ 7 — GEWÄHRLEISTUNG
+======================================================================
+Gewährleistungsfrist: 4 Jahre ab Abnahme gemäß § 13 VOB/B.
+
+======================================================================
+UNTERSCHRIFTEN
+======================================================================
+Auftraggeber: _________________________ Datum: ___________
+
+Auftragnehmer: ________________________ Datum: ___________
