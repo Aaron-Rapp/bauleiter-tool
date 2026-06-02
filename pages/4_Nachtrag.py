@@ -15,7 +15,7 @@ except Exception as e:
     st.stop()
 
 try:
-    baustellen = db.table("baustellen").select("id, name").execute().data
+    baustellen = db.table("baustellen").select("id, name, auftraggeber").execute().data
 except Exception as e:
     st.error(f"Fehler: {e}")
     st.stop()
