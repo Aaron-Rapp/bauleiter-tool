@@ -1,6 +1,7 @@
 import streamlit as st
 from utils.supabase_client import get_client
 from utils.gemini_helper import beschreibe_foto_fuer_nachtrag
+from utils.nachtrag_export import erstelle_nachtrag_docx
 from datetime import date
 
 st.set_page_config(page_title="Nachtrag-Generator", page_icon="📸", layout="wide")
@@ -70,6 +71,7 @@ with col_rechts:
                 }).execute()
 
                 st.session_state["letzter_nachtrag"] = nachtrag_text
+                st.session_state["letzter_beschreibung"] = beschreibung
                 st.success("✅ Mehrkostenanzeige erstellt und gespeichert!")
             except Exception as e:
                 st.error(f"Fehler: {e}")
@@ -77,7 +79,27 @@ with col_rechts:
     if "letzter_nachtrag" in st.session_state:
         st.markdown(st.session_state["letzter_nachtrag"])
         st.markdown("---")
-        st.caption("💡 Diesen Text kopieren und per E-Mail an den Auftraggeber senden.")
+        st.caption("💡 Als Word-Datei herunterladen und per E-Mail an den Auftraggeber senden.")
+
+        # Download als .docx
+        try:
+            ag_name = auswahl.get("auftraggeber", "Auftraggeber") if isinstance(auswahl, dict) else "Auftraggeber"
+            docx_bytes = erstelle_nachtrag_docx(
+                baustelle_name=auswahl["name"] if isinstance(auswahl, dict) else "Baustelle",
+                auftraggeber=ag_name,
+                datum=str(nachtrag_datum),
+                beschreibung=st.session_state.get("letzter_beschreibung", ""),
+                ki_text=st.session_state["letzter_nachtrag"]
+            )
+            st.download_button(
+                label="📥 Mehrkostenanzeige als Word (.docx) herunterladen",
+                data=docx_bytes,
+                file_name=f"Mehrkostenanzeige_{nachtrag_datum}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                use_container_width=True
+            )
+        except Exception as e:
+            st.warning(f"Download nicht verfügbar: {e}")
 
     st.markdown("---")
     st.subheader("📋 Gespeicherte Nachträge")

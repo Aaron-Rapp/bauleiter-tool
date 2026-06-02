@@ -4,20 +4,40 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel("gemini-2.5-flash")
+_api_key = os.getenv("GEMINI_API_KEY", "")
+if _api_key and "hier" not in _api_key:
+    genai.configure(api_key=_api_key)
+
+MODEL = "gemini-2.0-flash"
 
 
-def frage_an_dokumente(frage: str, dokument_texte: list[str]) -> str:
-    kontext = "\n\n---\n\n".join(dokument_texte)
-    prompt = f"""Du bist ein Assistent für einen Bauleiter im deutschen Bauwesen.
-Dir liegen folgende Dokumente vor (Verträge, Leistungsverzeichnisse, etc.):
+def _get_model():
+    key = os.getenv("GEMINI_API_KEY", "")
+    if not key or "hier" in key:
+        raise ValueError("Gemini API Key nicht konfiguriert. Bitte GEMINI_API_KEY in .env eintragen.")
+    genai.configure(api_key=key)
+    return genai.GenerativeModel(MODEL)
+
+
+def frage_an_dokumente(frage: str, dokument_texte: list) -> str:
+    model = _get_model()
+    kontext = "\n\n---DOKUMENT-TRENNER---\n\n".join(dokument_texte)
+
+    # Kontext auf max. 800.000 Zeichen begrenzen (Gemini 2.0 Flash: 1M Token Context)
+    if len(kontext) > 800000:
+        kontext = kontext[:800000] + "\n\n[Dokument wurde aus Platzgründen gekürzt]"
+
+    prompt = f"""Du bist ein erfahrener Assistent für einen deutschen Bauleiter (VOB-Kenntnisse).
+Dir liegen folgende Vertragsunterlagen vor:
 
 {kontext}
 
 Beantworte die folgende Frage ausschließlich auf Basis dieser Dokumente.
-Antworte klar mit JA oder NEIN am Anfang, dann erkläre kurz die relevante Vertragsstelle.
-Falls die Frage nicht aus den Dokumenten beantwortet werden kann, sage das deutlich.
+
+WICHTIG: Beginne deine Antwort immer mit "JA" oder "NEIN" (Großbuchstaben).
+Danach: kurze Erklärung (max. 3 Sätze) mit direktem Zitat aus dem Vertrag wenn möglich.
+Falls die Frage nicht aus den Dokumenten beantwortet werden kann, antworte mit:
+"UNKLAR – Diese Frage kann aus den vorliegenden Dokumenten nicht eindeutig beantwortet werden."
 
 Frage: {frage}"""
 
@@ -29,19 +49,32 @@ def beschreibe_foto_fuer_nachtrag(bild_bytes: bytes, beschreibung: str) -> dict:
     import PIL.Image
     import io
 
+    model = _get_model()
     bild = PIL.Image.open(io.BytesIO(bild_bytes))
 
-    prompt = f"""Du bist ein Bauleiter-Assistent im deutschen Bauwesen (VOB).
-Ein Bauleiter hat folgendes Foto gemacht mit dieser Beschreibung: "{beschreibung}"
+    prompt = f"""Du bist ein erfahrener Bauleiter-Assistent im deutschen Bauwesen (VOB/B §2).
+Der Bauleiter hat folgende Situation dokumentiert: "{beschreibung}"
 
-Erstelle auf Basis des Fotos und der Beschreibung eine strukturierte Mehrkostenanzeige mit:
-1. Kurzbeschreibung der Situation
-2. Betroffene Leistungsposition (geschätzt)
-3. Begründung warum es sich um eine Nachtragsleistung handelt
-4. Geschätzte Mehrkostensumme (Bandbreite angeben)
-5. Empfohlene nächste Schritte
+Erstelle auf Basis des Fotos und der Beschreibung eine professionelle Mehrkostenanzeige mit diesen Abschnitten:
 
-Antworte auf Deutsch, professionell und knapp."""
+**1. Sachverhalt**
+(Was ist passiert? Kurze, faktische Beschreibung)
+
+**2. Nachtragsbegründung (§2 VOB/B)**
+(Warum handelt es sich um eine zusätzliche/geänderte Leistung, die nicht im Vertrag enthalten ist?)
+
+**3. Betroffene Leistungsposition**
+(Geschätzte LV-Position oder Beschreibung)
+
+**4. Geschätzte Mehrkosten**
+(Bandbreite in Euro, mit kurzer Begründung)
+
+**5. Empfohlene nächste Schritte**
+- Sofortmaßnahme
+- Schriftliche Ankündigung an AG
+- Dokumentation
+
+Antworte auf Deutsch, professionell und sachlich."""
 
     response = model.generate_content([prompt, bild])
     return {"nachtrag_text": response.text}
