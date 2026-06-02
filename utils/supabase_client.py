@@ -1,8 +1,5 @@
-import os
 from supabase import create_client, Client
-from dotenv import load_dotenv
-
-load_dotenv()
+from utils.config import get_config
 
 _client: Client | None = None
 
@@ -10,11 +7,12 @@ _client: Client | None = None
 def get_client() -> Client:
     global _client
     if _client is None:
-        url = os.getenv("SUPABASE_URL", "")
-        key = os.getenv("SUPABASE_KEY", "")
+        url = get_config("SUPABASE_URL")
+        key = get_config("SUPABASE_KEY")
         if not url or not key or "hier" in url:
             raise ValueError(
-                "Supabase nicht konfiguriert. Bitte SUPABASE_URL und SUPABASE_KEY in die .env-Datei eintragen."
+                "Supabase nicht konfiguriert. "
+                "Bitte SUPABASE_URL und SUPABASE_KEY in die .env-Datei eintragen."
             )
         _client = create_client(url, key)
     return _client
