@@ -159,7 +159,9 @@ hr { border-color: #E8E6E2 !important; margin: 1rem 0 !important; }
 if "db" in st.session_state:
     db = st.session_state.db
 else:
-    db, _ = get_db_client()
+    db, _m = get_db_client()
+    st.session_state.db = db
+    st.session_state.db_modus = _m
 
 modus = st.session_state.get("db_modus", "lokal")
 
@@ -921,12 +923,14 @@ with tab_vob:
 
     def _ki_fehler(e):
         err = str(e)
-        if "429" in err or "quota" in err.lower() or "RESOURCE_EXHAUSTED" in err:
+        if ("API_KEY" in err or "api key" in err.lower()
+                or "API_KEY_INVALID" in err or "UNAUTHENTICATED" in err
+                or "PERMISSION_DENIED" in err or "401" in err or "403" in err):
+            st.error("**API-Key ungültig** — Bitte GEMINI_API_KEY in den Streamlit Secrets prüfen.")
+        elif "429" in err or "RESOURCE_EXHAUSTED" in err:
             st.warning("KI-Limit erreicht — Bitte 1 Minute warten und erneut versuchen.")
-        elif "API_KEY" in err or "api key" in err.lower():
-            st.error("API-Key ungültig — Prüfe GEMINI_API_KEY in der .env-Datei.")
         else:
-            st.error(f"KI-Fehler: {err[:200]}")
+            st.error(f"KI-Fehler: {err[:300]}")
 
     def _ki_generieren(prompt: str) -> str:
         api_key = get_config("GEMINI_API_KEY")
@@ -1333,12 +1337,14 @@ Stil: Sachlich, formell, vollständig. Auf Deutsch."""
                     st.rerun()
                 except Exception as e:
                     err = str(e)
-                    if "429" in err or "quota" in err.lower() or "RESOURCE_EXHAUSTED" in err:
+                    if ("API_KEY" in err or "api key" in err.lower()
+                            or "API_KEY_INVALID" in err or "UNAUTHENTICATED" in err
+                            or "PERMISSION_DENIED" in err or "401" in err or "403" in err):
+                        st.error("**API-Key ungültig** — Bitte GEMINI_API_KEY in den Streamlit Secrets prüfen.")
+                    elif "429" in err or "RESOURCE_EXHAUSTED" in err:
                         st.warning("KI-Limit erreicht — Bitte 1 Minute warten und erneut versuchen.")
-                    elif "API_KEY" in err or "api key" in err.lower():
-                        st.error("API-Key ungültig — Prüfe den GEMINI_API_KEY in der .env-Datei.")
                     else:
-                        st.error(f"KI-Fehler: {err[:200]}")
+                        st.error(f"KI-Fehler: {err[:300]}")
 
     # Neu generierten Tagesbericht anzeigen
     bericht_result = st.session_state.get(f"tagesbericht_{pid}")
