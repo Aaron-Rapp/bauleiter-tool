@@ -882,9 +882,9 @@ with tab_vob:
     )
 
     # ── Hilfsfunktion: Word-Dokument ──────────────────────────
-    def _erstelle_docx(titel_dok: str, meta: dict, text: str) -> bytes:
+    def _erstelle_docx(titel_dok: str, meta: dict, text: str, bilder: list = None) -> bytes:
         from docx import Document
-        from docx.shared import Cm, Pt
+        from docx.shared import Cm, Inches
         from docx.enum.text import WD_ALIGN_PARAGRAPH
         import io
         doc = Document()
@@ -923,6 +923,16 @@ with tab_vob:
         unt2 = doc.add_paragraph()
         unt2.add_run("Unterschrift Bauleiter: ").bold = True
         unt2.add_run("_________________________")
+        if bilder:
+            doc.add_page_break()
+            doc.add_heading("Foto-Anhang", 2)
+            for i, bild_bytes in enumerate(bilder, 1):
+                try:
+                    doc.add_paragraph(f"Foto {i}:")
+                    doc.add_picture(io.BytesIO(bild_bytes), width=Inches(5.5))
+                    doc.add_paragraph()
+                except Exception:
+                    pass
         buf = io.BytesIO(); doc.save(buf); return buf.getvalue()
 
     def _ki_fehler(e):
@@ -954,7 +964,8 @@ with tab_vob:
                 use_container_width=True)
         with c2:
             try:
-                docx_b = _erstelle_docx(titel_anzeige, meta, result["text"])
+                docx_b = _erstelle_docx(titel_anzeige, meta, result["text"],
+                                        bilder=result.get("bilder") or [])
                 st.download_button("Als Word (.docx)", data=docx_b,
                     file_name=f"{fname}_{result.get('datum','')}.docx",
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -1044,6 +1055,11 @@ with tab_vob:
             )
             mk_betrag = st.text_input("Voraussichtliche Mehrkosten (ca.)",
                 placeholder="z.B. ca. 8.500,– EUR netto", key="mk_betrag")
+            mk_fotos = st.file_uploader(
+                "Foto-Anhang (optional)", type=["jpg","jpeg","png","webp"],
+                accept_multiple_files=True, key="mk_fotos",
+                help="Fotos werden als Anhang ins Word-Dokument eingefügt"
+            )
 
             if st.button("Mehrkostenanzeige generieren", type="primary",
                          disabled=not mk_beschr.strip(), use_container_width=True, key="mk_btn"):
@@ -1105,6 +1121,7 @@ Kein akademischer Jargon. Schreibe den vollständigen Brief aus."""
                             "text": antwort, "datum": str(mk_datum),
                             "projekt": pname, "auftraggeber": mk_ag,
                             "titel": titel_dok,
+                            "bilder": [f.getvalue() for f in mk_fotos] if mk_fotos else [],
                         }
                         st.rerun()
                     except Exception as e:
@@ -1171,6 +1188,11 @@ Kein akademischer Jargon. Schreibe den vollständigen Brief aus."""
 
             bh_vertrag = st.text_input("Vertrags-/Auftragsnummer (optional)",
                 value=projekt.get("vertragsnummer",""), placeholder="z.B. V-2026-042", key="bh_vertrag")
+            bh_fotos = st.file_uploader(
+                "Foto-Anhang (optional)", type=["jpg","jpeg","png","webp"],
+                accept_multiple_files=True, key="bh_fotos",
+                help="Fotos werden als Anhang ins Word-Dokument eingefügt"
+            )
 
             if st.button("Behinderungsanzeige generieren", type="primary",
                          disabled=not bh_beschr.strip(), use_container_width=True, key="bh_btn"):
@@ -1236,6 +1258,7 @@ FORMAT: Professioneller Geschäftsbrief, kein Markdown, vollständig ausformulie
                             "text": antwort, "datum": str(bh_datum),
                             "projekt": pname, "auftraggeber": bh_ag,
                             "titel": titel_dok,
+                            "bilder": [f.getvalue() for f in bh_fotos] if bh_fotos else [],
                         }
                         st.rerun()
                     except Exception as e:
@@ -1305,6 +1328,11 @@ with tab_bericht:
             placeholder="z.B. Erdbau GmbH (4 Mann), Zimmerei Müller (2 Mann)...",
             key="bericht_personal"
         )
+        bericht_fotos = st.file_uploader(
+            "Foto-Anhang (optional)", type=["jpg","jpeg","png","webp"],
+            accept_multiple_files=True, key="bericht_fotos",
+            help="Fotos von der Baustelle — werden als Anhang ins Word-Dokument eingefügt"
+        )
 
         if st.button("Tagesbericht erstellen", type="primary",
                      disabled=not bericht_erledigt.strip(), use_container_width=True):
@@ -1339,6 +1367,7 @@ Stil: Sachlich, formell, vollständig. Auf Deutsch."""
                         "datum": str(bericht_datum),
                         "projekt": pname,
                         "titel": titel_tb,
+                        "bilder": [f.getvalue() for f in bericht_fotos] if bericht_fotos else [],
                     }
                     st.rerun()
                 except Exception as e:
@@ -1368,7 +1397,8 @@ Stil: Sachlich, formell, vollständig. Auf Deutsch."""
             try:
                 docx_b = _erstelle_docx(titel_tb,
                     {"Projekt": pname, "Datum": bericht_result["datum"]},
-                    bericht_result["text"])
+                    bericht_result["text"],
+                    bilder=bericht_result.get("bilder") or [])
                 st.download_button("Als Word (.docx)", data=docx_b,
                     file_name=f"{fname_tb}_{bericht_result['datum']}.docx",
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
