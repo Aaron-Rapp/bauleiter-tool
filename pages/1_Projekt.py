@@ -277,15 +277,17 @@ def get_naechste_nummer(typ: str) -> int:
     except Exception:
         return 1
 
-def speichere_dokument(typ: str, nummer: int, titel: str, inhalt: str, meta: dict):
+def speichere_dokument(typ: str, nummer: int, titel: str, inhalt: str, meta: dict) -> bool:
     try:
         db.table("schriftverkehr").insert({
             "projekt_id": pid, "typ": typ, "nummer": nummer,
             "titel": titel, "inhalt": inhalt,
             "meta": _json.dumps(meta, ensure_ascii=False),
         }).execute()
-    except Exception:
-        pass
+        return True
+    except Exception as e:
+        st.error(f"Fehler beim Speichern: {e}")
+        return False
 
 def lade_dokumente(typ: str) -> list:
     try:
@@ -934,7 +936,7 @@ with tab_vob:
                     except Exception as ex:
                         st.error(f"Word-Fehler: {ex}")
                 with c3:
-                    if st.button("Loschen", key=f"del_dok_{doc['id']}", use_container_width=True):
+                    if st.button("Löschen", key=f"del_dok_{doc['id']}", use_container_width=True):
                         try:
                             db.table("schriftverkehr").delete().eq("id", doc["id"]).execute()
                         except Exception:
