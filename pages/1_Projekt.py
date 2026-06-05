@@ -466,7 +466,12 @@ with tab_plaene:
     if plan_up and st.button("Plan speichern", type="primary", key="plan_save"):
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         pfad = f"{pid}/Plaene/{plan_ord}/{ts}_{plan_up.name}"
-        url = upload_datei(plan_up.getvalue(), pfad)
+        if modus == "supabase":
+            url = upload_datei(plan_up.getvalue(), pfad)
+        else:
+            import base64 as _b64mod
+            _mime = "application/pdf" if plan_up.name.lower().endswith(".pdf") else "application/octet-stream"
+            url = f"data:{_mime};base64," + _b64mod.b64encode(plan_up.getvalue()).decode()
         if url:
             db.table("dateien").insert({
                 "projekt_id": pid, "kategorie": "Plaene",
@@ -525,7 +530,18 @@ with tab_vertraege:
     if vert_up and st.button("Speichern", type="primary", key="vert_save"):
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         pfad = f"{pid}/Vertraege/{ts}_{vert_up.name}"
-        url = upload_datei(vert_up.getvalue(), pfad)
+        if modus == "supabase":
+            url = upload_datei(vert_up.getvalue(), pfad)
+        else:
+            import base64 as _b64mod
+            _ext = vert_up.name.lower()
+            if _ext.endswith(".pdf"):
+                _mime = "application/pdf"
+            elif _ext.endswith(".docx"):
+                _mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            else:
+                _mime = "application/octet-stream"
+            url = f"data:{_mime};base64," + _b64mod.b64encode(vert_up.getvalue()).decode()
         if url:
             db.table("dateien").insert({
                 "projekt_id": pid, "kategorie": "Vertraege",
@@ -874,6 +890,8 @@ with tab_vob:
     st.markdown("### VOB-Schriftverkehr")
     st.caption("KI-gestützte Erstellung von Mehrkostenanzeige und Behinderungsanzeige nach VOB/B.")
 
+    _vob_bauleiter = get_name() or pname
+
     vob_typ = st.radio(
         "Dokument erstellen",
         ["Mehrkostenanzeige", "Behinderungsanzeige"],
@@ -1071,7 +1089,7 @@ der VOB/B. Erstelle eine rechtssichere, professionelle Mehrkostenanzeige.
 PFLICHTSTRUKTUR nach VOB/B (exakt einhalten):
 
 1. BRIEFKOPF
-   - Auftragnehmer (Bauleiter): [Projektname als Absender]
+   - Auftragnehmer / Absender: {_vob_bauleiter}, Bauleitung Projekt {pname}
    - Empfänger/Auftraggeber: {mk_ag or 'Auftraggeber'}
    - Datum: {mk_datum.strftime('%d.%m.%Y')}
    - Betreff: "Mehrkostenanzeige gem. {mk_grundlage} – Projekt: {pname}{' – Auftrag ' + mk_vertrag if mk_vertrag else ''}"
@@ -1128,7 +1146,7 @@ Kein akademischer Jargon. Schreibe den vollständigen Brief aus."""
                         _ki_fehler(e)
 
         _ergebnis_anzeigen(f"mk_{pid}", "Mehrkostenanzeige",
-                           {"Projekt": pname, "Auftraggeber": mk_ag, "Datum": str(mk_datum)})
+                           {"Projekt": pname, "Bauleiter": _vob_bauleiter, "Auftraggeber": mk_ag, "Datum": str(mk_datum)})
 
         # Archiv Mehrkostenanzeigen
         _zeige_archiv("mehrkostenanzeige", "Mehrkostenanzeige")
@@ -1210,7 +1228,7 @@ behindert zu sein, so hat er es dem Auftraggeber unverzüglich schriftlich anzuz
 PFLICHTSTRUKTUR (exakt einhalten):
 
 1. BRIEFKOPF
-   - Auftragnehmer: {pname} (als Absender)
+   - Auftragnehmer / Absender: {_vob_bauleiter}, Bauleitung Projekt {pname}
    - Empfänger: {bh_ag or 'Auftraggeber'}
    - Datum der Anzeige: {bh_datum.strftime('%d.%m.%Y')}
    - Betreff: "Behinderungsanzeige gem. § 6 Abs. 1 VOB/B – Projekt: {pname}{' – Auftrag ' + bh_vertrag if bh_vertrag else ''}"
@@ -1265,7 +1283,7 @@ FORMAT: Professioneller Geschäftsbrief, kein Markdown, vollständig ausformulie
                         _ki_fehler(e)
 
         _ergebnis_anzeigen(f"bh_{pid}", "Behinderungsanzeige",
-                           {"Projekt": pname, "Auftraggeber": bh_ag, "Datum": str(bh_datum)})
+                           {"Projekt": pname, "Bauleiter": _vob_bauleiter, "Auftraggeber": bh_ag, "Datum": str(bh_datum)})
 
         # Archiv Behinderungsanzeigen
         _zeige_archiv("behinderungsanzeige", "Behinderungsanzeige")
