@@ -75,14 +75,15 @@ p { color: #1A1A1A !important; }
 [data-testid="stVerticalBlockBorderWrapper"] {
     border-radius: 14px !important;
     border: 1px solid #E8E6E2 !important;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 4px 12px rgba(0,0,0,0.04) !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.07) !important;
     background: #FFFFFF !important;
     overflow: visible !important;
-    transition: box-shadow 0.22s ease, transform 0.22s ease !important;
+    transition: box-shadow 0.22s ease, transform 0.22s ease, border-color 0.22s ease !important;
 }
 [data-testid="stVerticalBlockBorderWrapper"]:hover {
-    box-shadow: 0 6px 28px rgba(0,0,0,0.09) !important;
-    transform: scale(1.025) !important;
+    box-shadow: 0 12px 40px rgba(240,112,48,0.13), 0 4px 12px rgba(0,0,0,0.08) !important;
+    transform: translateY(-3px) scale(1.01) !important;
+    border-color: rgba(240,112,48,0.35) !important;
     z-index: 10 !important;
     position: relative !important;
 }
@@ -574,10 +575,10 @@ else:
                         bar_color = "linear-gradient(90deg,#4CAF50,#66BB6A)" if pct == 100 else "linear-gradient(90deg,#F07030,#F59050)"
                         st.markdown(f"""
                         <div style='margin: 0 0 0.7rem 0;'>
-                            <div style='display:flex; justify-content:space-between; font-size:0.74rem;
-                                        color:#94a3b8; margin-bottom:5px;'>
-                                <span>{todo_txt}</span>
-                                <span style='font-weight:600; color:{"#4CAF50" if pct==100 else "#F07030"};'>{pct}%</span>
+                            <div style='display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:5px;'>
+                                <span style='font-size:0.72rem; color:#94a3b8;'>{todo_txt}</span>
+                                <span style='font-size:1.45rem; font-weight:800; line-height:1; letter-spacing:-0.04em;
+                                             color:{"#4CAF50" if pct==100 else "#F07030"};'>{pct}<span style='font-size:0.68rem; font-weight:600; margin-left:1px; opacity:0.85;'>%</span></span>
                             </div>
                             <div style='background:#f1f5f9; border-radius:999px; height:5px; overflow:hidden;'>
                                 <div style='background:{bar_color}; width:{pct}%; height:100%; border-radius:999px;'></div>

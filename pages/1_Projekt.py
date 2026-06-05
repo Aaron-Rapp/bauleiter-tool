@@ -278,7 +278,7 @@ def _zeige_foto_gross(url: str, name: str):
 
 # ── 8 Tabs ────────────────────────────────────────────────────
 tab_todos, tab_kalender, tab_chat, tab_vertraege, tab_plaene, tab_bilder, tab_vob, tab_bericht = st.tabs([
-    "Aufgaben", "Kalender", "KI-Assistent", "Verträge", "Pläne", "Bilder", "VOB-Schriftverkehr", "Tagesbericht"
+    "✅ Aufgaben", "📅 Kalender", "🤖 KI-Assistent", "📄 Verträge", "📐 Pläne", "📷 Bilder", "⚖️ VOB", "📋 Tagesbericht"
 ])
 
 # ─────────────────────────────────────────────────────────────
