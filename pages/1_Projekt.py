@@ -5,6 +5,25 @@ import html as html_mod
 from google import genai as genai_sdk
 from utils.config import get_config
 
+try:
+    from streamlit_calendar import calendar as st_calendar
+    _HAS_CALENDAR = True
+except ImportError:
+    _HAS_CALENDAR = False
+
+try:
+    from streamlit_pdf_viewer import pdf_viewer as _pdf_viewer
+    _HAS_PDF = True
+except ImportError:
+    _HAS_PDF = False
+
+try:
+    from streamlit_folium import st_folium as _st_folium
+    import folium as _folium
+    _HAS_FOLIUM = True
+except ImportError:
+    _HAS_FOLIUM = False
+
 st.set_page_config(page_title="Projekt", page_icon="🏗️", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
@@ -228,6 +247,32 @@ if anschrift:
             unsafe_allow_html=True
         )
 
+# ── Karte ─────────────────────────────────────────────────────
+if _HAS_FOLIUM and anschrift:
+    coords_key = f"coords_{pid}"
+    if coords_key not in st.session_state:
+        try:
+            from utils.wetter import geocode
+            st.session_state[coords_key] = geocode(anschrift) or False
+        except Exception:
+            st.session_state[coords_key] = False
+    coords = st.session_state.get(coords_key)
+    if coords:
+        with st.expander("Baustellenstandort anzeigen"):
+            m = _folium.Map(location=coords, zoom_start=16, tiles="CartoDB positron")
+            _folium.Marker(
+                location=coords,
+                tooltip=anschrift,
+                popup=_folium.Popup(f"<b>{html_mod.escape(pname)}</b><br>{html_mod.escape(anschrift)}", max_width=250),
+                icon=_folium.Icon(color="orange", icon="home", prefix="fa")
+            ).add_to(m)
+            _st_folium(m, use_container_width=True, height=320, returned_objects=[])
+
+@st.dialog("Foto", width="large")
+def _zeige_foto_gross(url: str, name: str):
+    st.image(url, use_container_width=True)
+    st.caption(name)
+
 # ── 8 Tabs ────────────────────────────────────────────────────
 tab_todos, tab_kalender, tab_chat, tab_vertraege, tab_plaene, tab_bilder, tab_vob, tab_bericht = st.tabs([
     "Aufgaben", "Kalender", "KI-Assistent", "Verträge", "Pläne", "Bilder", "VOB-Schriftverkehr", "Tagesbericht"
@@ -345,18 +390,27 @@ with tab_bilder:
     try:
         bilder = db.table("dateien").select("*").eq("projekt_id", pid).eq("kategorie", "Bilder").eq("unterordner", akt_ordner).neq("datei_name", ".ordner").order("erstellt_am", desc=True).execute().data
         if bilder:
-            cols = st.columns(3)
+            st.caption(f"{len(bilder)} Foto{'s' if len(bilder) != 1 else ''} in '{akt_ordner}'")
+            cols = st.columns(2)
             for i, b in enumerate(bilder):
-                with cols[i % 3]:
+                with cols[i % 2]:
                     with st.container(border=True):
                         try:
                             st.image(b["datei_url"], use_container_width=True)
                         except Exception:
-                            st.markdown(f"{b['datei_name']}")
-                        st.caption(b["erstellt_am"][:10] if b.get("erstellt_am") else "")
-                        if st.button("Löschen", key=f"del_bild_{b['id']}", use_container_width=True):
-                            db.table("dateien").delete().eq("id", b["id"]).execute()
-                            st.rerun()
+                            st.markdown(f"📷 {b['datei_name']}")
+                        datum = b["erstellt_am"][:10] if b.get("erstellt_am") else ""
+                        name = b.get("datei_name", "")
+                        c1, c2, c3 = st.columns([4, 2, 2])
+                        with c1:
+                            st.caption(f"{datum}")
+                        with c2:
+                            if st.button("Vollbild", key=f"voll_{b['id']}", use_container_width=True):
+                                _zeige_foto_gross(b["datei_url"], f"{name} · {datum}")
+                        with c3:
+                            if st.button("Löschen", key=f"del_bild_{b['id']}", use_container_width=True):
+                                db.table("dateien").delete().eq("id", b["id"]).execute()
+                                st.rerun()
         else:
             st.markdown(f"""
             <div style='text-align:center; padding:2rem; color:#AAAAAA;'>
@@ -415,11 +469,26 @@ with tab_plaene:
                         st.markdown(f"**{p['datei_name']}**")
                         st.caption(p["erstellt_am"][:10] if p.get("erstellt_am") else "")
                     with col_dl:
-                        st.markdown(f"[Download]({p['datei_url']})")
+                        if p["datei_url"].startswith("http"):
+                            st.markdown(f"[Download]({p['datei_url']})")
                     with col_del:
                         if st.button("Lösch.", key=f"del_plan_{p['id']}", help="Löschen"):
                             db.table("dateien").delete().eq("id", p["id"]).execute()
                             st.rerun()
+                    # PDF inline anzeigen
+                    if _HAS_PDF and p["datei_name"].lower().endswith(".pdf"):
+                        with st.expander("PDF anzeigen"):
+                            try:
+                                if p["datei_url"].startswith("data:"):
+                                    import base64 as _b64
+                                    pdf_bytes = _b64.b64decode(p["datei_url"].split(",")[1])
+                                    _pdf_viewer(input=pdf_bytes, width=700)
+                                elif p["datei_url"].startswith("http"):
+                                    import requests as _req
+                                    pdf_bytes = _req.get(p["datei_url"], timeout=8).content
+                                    _pdf_viewer(input=pdf_bytes, width=700)
+                            except Exception as ex:
+                                st.caption(f"Vorschau nicht verfügbar: {ex}")
         else:
             st.markdown(f"""
             <div style='text-align:center; padding:2rem; color:#AAAAAA;'>
@@ -459,11 +528,26 @@ with tab_vertraege:
                         st.markdown(f"**{v['datei_name']}**")
                         st.caption(v["erstellt_am"][:10] if v.get("erstellt_am") else "")
                     with col_dl:
-                        st.markdown(f"[Download]({v['datei_url']})")
+                        if v["datei_url"].startswith("http"):
+                            st.markdown(f"[Download]({v['datei_url']})")
                     with col_del:
                         if st.button("Lösch.", key=f"del_vert_{v['id']}", help="Löschen"):
                             db.table("dateien").delete().eq("id", v["id"]).execute()
                             st.rerun()
+                    # PDF inline anzeigen
+                    if _HAS_PDF and v["datei_name"].lower().endswith(".pdf"):
+                        with st.expander("PDF anzeigen"):
+                            try:
+                                if v["datei_url"].startswith("data:"):
+                                    import base64 as _b64
+                                    pdf_bytes = _b64.b64decode(v["datei_url"].split(",")[1])
+                                    _pdf_viewer(input=pdf_bytes, width=700)
+                                elif v["datei_url"].startswith("http"):
+                                    import requests as _req
+                                    pdf_bytes = _req.get(v["datei_url"], timeout=8).content
+                                    _pdf_viewer(input=pdf_bytes, width=700)
+                            except Exception as ex:
+                                st.caption(f"Vorschau nicht verfügbar: {ex}")
         else:
             st.markdown("""
             <div style='text-align:center; padding:2rem; color:#AAAAAA;'>
@@ -709,90 +793,66 @@ with tab_kalender:
                 st.success("Termin eingetragen!")
                 st.rerun()
 
-    col_f1, col_f2, col_f3 = st.columns(3)
-    with col_f1:
-        filter_kat = st.multiselect("Anzeigen", ["gruen", "blau", "orange"],
-                                    default=["gruen", "blau", "orange"],
-                                    format_func=lambda k: FARBEN[k][0])
-    with col_f2:
-        von_filter = st.date_input("Ab", value=datetime.date.today(), format="DD.MM.YYYY", key="kal_von")
-    with col_f3:
-        bis_filter = st.date_input("Bis", value=datetime.date.today() + datetime.timedelta(days=30), format="DD.MM.YYYY", key="kal_bis")
-
     try:
-        termine = db.table("kalender").select("*").eq("projekt_id", pid).gte("datum", str(von_filter)).lte("datum", str(bis_filter)).order("datum").execute().data
-        termine = [t for t in termine if t["kategorie"] in filter_kat]
+        alle_termine = db.table("kalender").select("*").eq("projekt_id", pid).order("datum").execute().data
+        farb_map = {"gruen": "#16a34a", "blau": "#2563eb", "orange": "#ea580c"}
 
-        if not termine:
-            st.markdown("""
-            <div style='text-align:center; padding:2rem; color:#AAAAAA;'>
-                <p style='font-size:0.9rem; margin:0;'>Keine Termine im gewählten Zeitraum</p>
-            </div>""", unsafe_allow_html=True)
-        else:
-            monats_map = {}
-            for t in termine:
+        if _HAS_CALENDAR:
+            events = []
+            for t in alle_termine:
+                end = t.get("datum_bis") or t["datum"]
+                # FullCalendar: end-Datum bei mehrtägigen Events ist exklusiv → +1 Tag
                 try:
-                    dt = datetime.date.fromisoformat(t["datum"])
-                    _MONATE = {1:"Januar",2:"Februar",3:"März",4:"April",5:"Mai",6:"Juni",
-                               7:"Juli",8:"August",9:"September",10:"Oktober",11:"November",12:"Dezember"}
-                    monat_key = f"{_MONATE[dt.month]} {dt.year}"
+                    dt_end = datetime.date.fromisoformat(end)
+                    dt_end += datetime.timedelta(days=1)
+                    end_str = str(dt_end)
                 except Exception:
-                    monat_key = "Unbekannt"
-                monats_map.setdefault(monat_key, []).append(t)
-
-            for monat, monat_termine in monats_map.items():
-                st.markdown(f"<h3 style='font-size:1.05rem; color:#475569; margin-top:1.2rem;'>{monat}</h3>", unsafe_allow_html=True)
-                akt_datum = None
-                for t in monat_termine:
-                    try:
-                        dt = datetime.date.fromisoformat(t["datum"])
-                        wochentag = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"][dt.weekday()]
-                        datum_str = f"{wochentag}, {dt.strftime('%d.%m.%Y')}"
-                    except Exception:
-                        datum_str = t["datum"]
-
-                    if t["datum"] != akt_datum:
-                        akt_datum = t["datum"]
-                        st.markdown(f"<p style='font-size:0.82rem; font-weight:600; color:#AAAAAA; letter-spacing:0.05em; text-transform:uppercase; margin: 0.8rem 0 0.3rem 0;'>{datum_str}</p>", unsafe_allow_html=True)
-
-                    bg   = FARBEN[t["kategorie"]][1]
-                    fg   = FARBEN[t["kategorie"]][2]
-                    acc  = FARBEN[t["kategorie"]][3]
-
-                    # Zeitspanne anzeigen
-                    datum_bis_raw = t.get("datum_bis", "")
-                    if datum_bis_raw and datum_bis_raw != t["datum"]:
+                    end_str = end
+                events.append({
+                    "title": t["titel"],
+                    "start": t["datum"],
+                    "end": end_str,
+                    "color": farb_map.get(t["kategorie"], "#2563eb"),
+                    "extendedProps": {"beschreibung": t.get("beschreibung", ""), "db_id": t["id"]},
+                })
+            cal_opts = {
+                "headerToolbar": {"left": "prev,next today", "center": "title", "right": "dayGridMonth,listMonth"},
+                "initialView": "dayGridMonth",
+                "locale": "de",
+                "height": 560,
+                "editable": False,
+                "selectable": False,
+                "eventClick": {"enabled": True},
+            }
+            cal_result = st_calendar(events=events, options=cal_opts, key=f"cal_{pid}")
+            # Geklickten Termin anzeigen
+            if cal_result and cal_result.get("eventClick"):
+                ev = cal_result["eventClick"].get("event", {})
+                props = ev.get("extendedProps", {})
+                with st.container(border=True):
+                    st.markdown(f"**{ev.get('title', '')}**")
+                    st.caption(ev.get("start", ""))
+                    if props.get("beschreibung"):
+                        st.markdown(props["beschreibung"])
+                    if st.button("Termin löschen", key="del_kal_click"):
                         try:
-                            dt_bis = datetime.date.fromisoformat(datum_bis_raw)
-                            spanne = f"&nbsp;&nbsp;bis {dt_bis.strftime('%d.%m.%Y')}"
-                        except Exception:
-                            spanne = ""
-                    else:
-                        spanne = ""
-
-                    zeit = ""
-                    if t.get("uhrzeit_von"):
-                        zeit = f"&nbsp;&nbsp;{t['uhrzeit_von']}"
-                        if t.get("uhrzeit_bis"):
-                            zeit += f" – {t['uhrzeit_bis']} Uhr"
-
-                    beschr_html = f"<div style='font-size:0.8rem; opacity:0.75; margin-top:3px;'>{html_mod.escape(t['beschreibung'])}</div>" if t.get("beschreibung") else ""
-
-                    col_t, col_del = st.columns([12, 1])
-                    with col_t:
-                        titel_safe = html_mod.escape(t["titel"])
-                        st.markdown(
-                            f"<div style='background:{bg}; color:{fg}; padding:10px 16px; "
-                            f"border-radius:8px; margin:2px 0; border-left:3px solid {acc};'>"
-                            f"<span style='font-weight:600;'>{titel_safe}</span>"
-                            f"<span style='font-size:0.82rem; font-weight:400;'>{spanne}{zeit}</span>"
-                            f"{beschr_html}</div>",
-                            unsafe_allow_html=True
-                        )
-                    with col_del:
-                        if st.button("X", key=f"del_kal_{t['id']}", help="Löschen"):
-                            db.table("kalender").delete().eq("id", t["id"]).execute()
+                            db.table("kalender").delete().eq("id", props["db_id"]).execute()
                             st.rerun()
+                        except Exception:
+                            pass
+        else:
+            # Fallback: Liste
+            if not alle_termine:
+                st.info("Keine Termine eingetragen.")
+            for t in alle_termine:
+                bg = FARBEN[t["kategorie"]][1]; fg = FARBEN[t["kategorie"]][2]; acc = FARBEN[t["kategorie"]][3]
+                col_t, col_del = st.columns([12, 1])
+                with col_t:
+                    st.markdown(f"<div style='background:{bg};color:{fg};padding:8px 14px;border-radius:8px;border-left:3px solid {acc};margin:2px 0'><b>{html_mod.escape(t['titel'])}</b> <span style='font-size:0.82rem'>{t['datum']}</span></div>", unsafe_allow_html=True)
+                with col_del:
+                    if st.button("X", key=f"del_kal_{t['id']}"):
+                        db.table("kalender").delete().eq("id", t["id"]).execute()
+                        st.rerun()
     except Exception as e:
         st.error(f"Fehler: {e}")
 
