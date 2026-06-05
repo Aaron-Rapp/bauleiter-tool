@@ -1,7 +1,11 @@
 .env
 __pycache__/
 *.pyc
+.DS_Store
+*.aiff
+*.wav
 .streamlit/secrets.toml
-venv/
-.venv/
-*.DS_Store
+bauleiter_lokal.db
+.bauleiter_rolle.json
+.claude/
+.vscode/

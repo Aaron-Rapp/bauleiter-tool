@@ -1,51 +1,88 @@
--- BAULEITER-TOOL: Supabase Datenbankschema
--- Diesen gesamten Text in Supabase → SQL Editor kopieren und ausführen
+-- ============================================================
+-- Bauleiter-Tool v2 — Supabase Schema
+-- In Supabase → SQL Editor einfügen und ausführen
+-- ============================================================
 
--- Tabelle: Baustellen
-CREATE TABLE IF NOT EXISTS baustellen (
+-- Alte Tabellen löschen
+DROP TABLE IF EXISTS kalender CASCADE;
+DROP TABLE IF EXISTS todos CASCADE;
+DROP TABLE IF EXISTS dateien CASCADE;
+DROP TABLE IF EXISTS projekte CASCADE;
+DROP TABLE IF EXISTS einstellungen CASCADE;
+DROP TABLE IF EXISTS aufgaben CASCADE;
+DROP TABLE IF EXISTS baustellen CASCADE;
+DROP TABLE IF EXISTS dokumente CASCADE;
+DROP TABLE IF EXISTS nachtraege CASCADE;
+
+-- ============================================================
+-- Tabellen anlegen
+-- ============================================================
+
+CREATE TABLE projekte (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     name TEXT NOT NULL,
-    auftraggeber TEXT NOT NULL,
-    ort TEXT,
-    auftragssumme NUMERIC(12, 2) DEFAULT 0,
-    baubeginn DATE,
-    status TEXT DEFAULT 'Arbeitsvorbereitung'
-        CHECK (status IN ('Arbeitsvorbereitung', 'Bauausführung', 'Fertiggestellt')),
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    kostenstelle TEXT DEFAULT '',
+    anschrift TEXT DEFAULT '',
+    bauzeit_von DATE,
+    bauzeit_bis DATE,
+    foto_url TEXT DEFAULT '',
+    erstellt_am TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Tabelle: Dokumente (Verträge, LV, Pläne)
-CREATE TABLE IF NOT EXISTS dokumente (
+CREATE TABLE dateien (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    baustelle_id UUID REFERENCES baustellen(id) ON DELETE CASCADE,
-    dateiname TEXT NOT NULL,
-    text TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    projekt_id UUID REFERENCES projekte(id) ON DELETE CASCADE,
+    kategorie TEXT NOT NULL CHECK (kategorie IN ('Bilder', 'Plaene', 'Vertraege')),
+    unterordner TEXT DEFAULT '',
+    datei_name TEXT NOT NULL,
+    datei_url TEXT NOT NULL,
+    erstellt_am TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Tabelle: Aufgaben (Checkliste)
-CREATE TABLE IF NOT EXISTS aufgaben (
+CREATE TABLE todos (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    baustelle_id UUID REFERENCES baustellen(id) ON DELETE CASCADE,
-    phase TEXT NOT NULL
-        CHECK (phase IN ('Arbeitsvorbereitung', 'Bauausführung', 'Fertiggestellt')),
+    projekt_id UUID REFERENCES projekte(id) ON DELETE CASCADE,
     titel TEXT NOT NULL,
+    beschreibung TEXT DEFAULT '',
     erledigt BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    phase TEXT DEFAULT 'Allgemein',
+    erstellt_am TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Tabelle: Nachträge
-CREATE TABLE IF NOT EXISTS nachtraege (
+CREATE TABLE kalender (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    baustelle_id UUID REFERENCES baustellen(id) ON DELETE CASCADE,
-    datum DATE,
-    beschreibung TEXT,
-    ki_text TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    projekt_id UUID REFERENCES projekte(id) ON DELETE CASCADE,
+    titel TEXT NOT NULL,
+    datum DATE NOT NULL,
+    uhrzeit_von TEXT DEFAULT '',
+    uhrzeit_bis TEXT DEFAULT '',
+    kategorie TEXT NOT NULL CHECK (kategorie IN ('gruen', 'blau', 'orange')),
+    beschreibung TEXT DEFAULT '',
+    erstellt_am TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Row Level Security deaktivieren (für einfachen Demo-Betrieb)
-ALTER TABLE baustellen DISABLE ROW LEVEL SECURITY;
-ALTER TABLE dokumente DISABLE ROW LEVEL SECURITY;
-ALTER TABLE aufgaben DISABLE ROW LEVEL SECURITY;
-ALTER TABLE nachtraege DISABLE ROW LEVEL SECURITY;
+-- ============================================================
+-- Row Level Security deaktivieren + Policies anlegen
+-- (doppelte Absicherung damit es in jedem Fall funktioniert)
+-- ============================================================
+
+ALTER TABLE projekte DISABLE ROW LEVEL SECURITY;
+ALTER TABLE dateien  DISABLE ROW LEVEL SECURITY;
+ALTER TABLE todos    DISABLE ROW LEVEL SECURITY;
+ALTER TABLE kalender DISABLE ROW LEVEL SECURITY;
+
+-- Erlaubnis für alle Operationen (Fallback falls RLS aktiv bleibt)
+DROP POLICY IF EXISTS "allow_all" ON projekte;
+DROP POLICY IF EXISTS "allow_all" ON dateien;
+DROP POLICY IF EXISTS "allow_all" ON todos;
+DROP POLICY IF EXISTS "allow_all" ON kalender;
+
+CREATE POLICY "allow_all" ON projekte FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "allow_all" ON dateien  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "allow_all" ON todos    FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "allow_all" ON kalender FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- ============================================================
+-- Storage Bucket
+-- Manuell anlegen: Storage → New Bucket → "bauleiter-dateien" → Public: AN
+-- ============================================================

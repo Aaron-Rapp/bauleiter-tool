@@ -1,7 +1,8 @@
 from supabase import create_client, Client
 from utils.config import get_config
 
-_client: Client | None = None
+from typing import Optional
+_client: Optional[Client] = None
 
 
 def get_client() -> Client:
