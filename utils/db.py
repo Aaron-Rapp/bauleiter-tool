@@ -9,8 +9,9 @@ import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
-# SQLite-Pfad (lokal, im Projektordner)
-_DB_PFAD = Path(__file__).parent.parent / "bauleiter_lokal.db"
+# SQLite-Pfad: /tmp/ auf Cloud (beschreibbar), lokal im Projektordner
+_LOKAL_PFAD = Path(__file__).parent.parent / "bauleiter_lokal.db"
+_DB_PFAD = _LOKAL_PFAD if _LOKAL_PFAD.parent.exists() and not str(_LOKAL_PFAD).startswith("/mount") else Path("/tmp/bauleiter_lokal.db")
 
 
 def _sqlite_conn():
@@ -245,15 +246,8 @@ def get_db_client():
     try:
         from utils.supabase_client import get_client
         db = get_client()
-        # Teste ob INSERT funktioniert
-        test_id = str(uuid.uuid4())
-        db.table("projekte").insert({
-            "id": test_id,
-            "name": "__rls_test__",
-            "foto_url": ""
-        }).execute()
-        # Aufräumen
-        db.table("projekte").delete().eq("id", test_id).execute()
+        # Verbindungstest per SELECT (kein Schreibzugriff nötig)
+        db.table("projekte").select("id").limit(1).execute()
         return db, "supabase"
     except Exception:
         return LokalerClient(), "lokal"

@@ -93,7 +93,7 @@ def lade_demo_projekt(db) -> str:
             "projekt_id": pid,
             "titel": titel,
             "phase": phase,
-            "erledigt": 1 if erledigt else 0,
+            "erledigt": bool(erledigt),
         }).execute()
 
     return pid

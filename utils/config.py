@@ -27,7 +27,13 @@ def get_config(key: str) -> str:
 
 
 def get_rolle() -> Optional[str]:
-    """Liest gespeicherte Rolle aus lokaler JSON-Datei"""
+    """Liest gespeicherte Rolle: session_state (primär) oder lokale Datei (Fallback)."""
+    try:
+        import streamlit as st
+        if "bauleiter_rolle" in st.session_state:
+            return st.session_state["bauleiter_rolle"]
+    except Exception:
+        pass
     try:
         if _ROLLE_PFAD.exists():
             data = json.loads(_ROLLE_PFAD.read_text(encoding="utf-8"))
@@ -38,7 +44,12 @@ def get_rolle() -> Optional[str]:
 
 
 def set_rolle(rolle: str):
-    """Speichert Rolle in lokaler JSON-Datei"""
+    """Speichert Rolle in session_state und (wenn möglich) auf Disk."""
+    try:
+        import streamlit as st
+        st.session_state["bauleiter_rolle"] = rolle
+    except Exception:
+        pass
     try:
         _ROLLE_PFAD.write_text(json.dumps({"rolle": rolle}), encoding="utf-8")
     except Exception:
@@ -46,7 +57,12 @@ def set_rolle(rolle: str):
 
 
 def reset_rolle():
-    """Löscht gespeicherte Rolle"""
+    """Löscht gespeicherte Rolle."""
+    try:
+        import streamlit as st
+        st.session_state.pop("bauleiter_rolle", None)
+    except Exception:
+        pass
     try:
         if _ROLLE_PFAD.exists():
             _ROLLE_PFAD.unlink()

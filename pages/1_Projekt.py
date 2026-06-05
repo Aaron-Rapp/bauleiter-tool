@@ -348,7 +348,7 @@ with tab_bilder:
                 with cols[i % 3]:
                     with st.container(border=True):
                         try:
-                            st.image(b["datei_url"], use_column_width=True)
+                            st.image(b["datei_url"], use_container_width=True)
                         except Exception:
                             st.markdown(f"{b['datei_name']}")
                         st.caption(b["erstellt_am"][:10] if b.get("erstellt_am") else "")
