@@ -589,11 +589,13 @@ else:
 
                         # Fixer Textblock — immer gleiche Höhe egal wie viel Text
                         pname_safe = html_mod.escape(p['name'])
+                        ag   = html_mod.escape(p.get("auftraggeber") or "")
                         kst  = html_mod.escape(p.get("kostenstelle") or "")
                         adr  = html_mod.escape(p.get("anschrift") or "")
                         von  = html_mod.escape(p.get("bauzeit_von") or "")
                         bis  = html_mod.escape(p.get("bauzeit_bis") or "")
                         meta_html = ""
+                        if ag:   meta_html += f"<div style='white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500;color:#475569;'>{ag}</div>"
                         if kst:  meta_html += f"<div style='white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>{kst}</div>"
                         if adr:  meta_html += f"<div style='white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>{adr}</div>"
                         if von or bis: meta_html += f"<div>{von} – {bis}</div>"
@@ -648,6 +650,11 @@ else:
                         if st.session_state.get("bearbeite_projekt") == p["id"]:
                             with st.form(f"edit_form_{p['id']}"):
                                 e_name = st.text_input("Name", value=p["name"])
+                                ea1, ea2 = st.columns(2)
+                                with ea1:
+                                    e_ag  = st.text_input("Auftraggeber", value=p.get("auftraggeber",""))
+                                with ea2:
+                                    e_vnr = st.text_input("Vertragsnummer", value=p.get("vertragsnummer",""))
                                 ec1, ec2 = st.columns(2)
                                 with ec1:
                                     e_kst  = st.text_input("Kostenstelle", value=p.get("kostenstelle",""))
@@ -661,10 +668,23 @@ else:
                                 sc1, sc2 = st.columns(2)
                                 with sc1:
                                     if st.form_submit_button("Speichern", type="primary", use_container_width=True):
-                                        upd = {"name": e_name.strip(), "kostenstelle": e_kst.strip(), "anschrift": e_adr.strip()}
+                                        upd = {
+                                            "name": e_name.strip(),
+                                            "auftraggeber": e_ag.strip(),
+                                            "vertragsnummer": e_vnr.strip(),
+                                            "kostenstelle": e_kst.strip(),
+                                            "anschrift": e_adr.strip(),
+                                        }
                                         if e_von: upd["bauzeit_von"] = str(e_von)
                                         if e_bis: upd["bauzeit_bis"] = str(e_bis)
-                                        db.table("projekte").update(upd).eq("id", p["id"]).execute()
+                                        try:
+                                            db.table("projekte").update(upd).eq("id", p["id"]).execute()
+                                        except Exception as _ue:
+                                            if "auftraggeber" in str(_ue) or "vertragsnummer" in str(_ue):
+                                                upd.pop("auftraggeber", None); upd.pop("vertragsnummer", None)
+                                                db.table("projekte").update(upd).eq("id", p["id"]).execute()
+                                            else:
+                                                raise
                                         st.session_state.bearbeite_projekt = None
                                         st.rerun()
                                 with sc2:

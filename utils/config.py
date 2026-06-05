@@ -72,34 +72,18 @@ def reset_rolle():
 
 
 def get_name() -> str:
-    """Liest gespeicherten Namen des Benutzers."""
+    """Liest den Namen aus der aktuellen Sitzung (wird nicht dauerhaft gespeichert)."""
     try:
         import streamlit as st
-        if "bauleiter_name" in st.session_state:
-            return st.session_state["bauleiter_name"]
+        return st.session_state.get("bauleiter_name", "")
     except Exception:
-        pass
-    try:
-        if _ROLLE_PFAD.exists():
-            data = json.loads(_ROLLE_PFAD.read_text(encoding="utf-8"))
-            return data.get("name", "")
-    except Exception:
-        pass
-    return ""
+        return ""
 
 
 def set_name(name: str):
-    """Speichert den Namen des Benutzers."""
+    """Speichert den Namen nur für die aktuelle Sitzung."""
     try:
         import streamlit as st
         st.session_state["bauleiter_name"] = name
-    except Exception:
-        pass
-    try:
-        data = {}
-        if _ROLLE_PFAD.exists():
-            data = json.loads(_ROLLE_PFAD.read_text(encoding="utf-8"))
-        data["name"] = name
-        _ROLLE_PFAD.write_text(json.dumps(data), encoding="utf-8")
     except Exception:
         pass

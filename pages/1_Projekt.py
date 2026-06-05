@@ -526,6 +526,47 @@ with tab_vertraege:
     st.markdown("### Verträge & Vereinbarungen")
     st.caption("Verträge, Leistungsverzeichnisse und Vereinbarungen für dieses Projekt.")
 
+    # ── Briefkopf-Vorlage ─────────────────────────────────────
+    with st.expander("🖼️  Briefkopf-Vorlage (für VOB-Dokumente & Tagesberichte)", expanded=False):
+        try:
+            _bk_rows = db.table("dateien").select("*").eq("projekt_id", pid).eq("kategorie", "Briefkopf").execute().data
+        except Exception:
+            _bk_rows = []
+
+        if _bk_rows:
+            _bk = _bk_rows[0]
+            st.success(f"Aktive Vorlage: **{_bk['datei_name']}**")
+            st.caption("Alle Word-Exporte (VOB-Schriftverkehr, Tagesbericht) verwenden diesen Briefkopf automatisch.")
+            if st.button("Vorlage entfernen", key="del_briefkopf"):
+                db.table("dateien").delete().eq("id", _bk["id"]).execute()
+                st.rerun()
+        else:
+            st.info("Keine Vorlage hinterlegt — Word-Dokumente werden im Standard-Layout erstellt.")
+
+        st.markdown("""
+        <div style='font-size:0.82rem; color:#777672; margin-bottom:0.5rem;'>
+        Tipp: Erstellen Sie in Word ein leeres Dokument mit Ihrem Firmenlogo, Briefkopf und Fußzeile.
+        Inhalt weglassen — die App befüllt das Dokument automatisch.
+        </div>""", unsafe_allow_html=True)
+
+        bk_up = st.file_uploader("Word-Vorlage hochladen (.docx)", type=["docx"], key="briefkopf_up",
+                                  help="Word-Dokument mit Briefkopf, Logo und Adresse")
+        if bk_up and st.button("Vorlage speichern", type="primary", key="briefkopf_save"):
+            try:
+                db.table("dateien").delete().eq("projekt_id", pid).eq("kategorie", "Briefkopf").execute()
+            except Exception:
+                pass
+            import base64 as _b64mod
+            _bk_mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            _bk_url = f"data:{_bk_mime};base64," + _b64mod.b64encode(bk_up.getvalue()).decode()
+            db.table("dateien").insert({
+                "projekt_id": pid, "kategorie": "Briefkopf",
+                "unterordner": "", "datei_name": bk_up.name, "datei_url": _bk_url
+            }).execute()
+            st.success(f"Vorlage '{bk_up.name}' gespeichert!")
+            st.rerun()
+
+    st.markdown("---")
     vert_up = st.file_uploader("Dokument hochladen (PDF, Word)", type=["pdf","docx","doc"], key="vert_up")
     if vert_up and st.button("Speichern", type="primary", key="vert_save"):
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -892,6 +933,17 @@ with tab_vob:
 
     _vob_bauleiter = get_name() or pname
 
+    # Briefkopf-Status anzeigen
+    try:
+        _hat_vorlage = bool(db.table("dateien").select("id").eq("projekt_id", pid).eq("kategorie", "Briefkopf").execute().data)
+    except Exception:
+        _hat_vorlage = False
+    if _hat_vorlage:
+        st.markdown("""<div style='background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;
+            padding:8px 14px;font-size:0.83rem;color:#166534;margin-bottom:0.8rem;'>
+            ✓ Briefkopf-Vorlage aktiv — Word-Exporte verwenden automatisch Ihren Briefkopf
+            </div>""", unsafe_allow_html=True)
+
     vob_typ = st.radio(
         "Dokument erstellen",
         ["Mehrkostenanzeige", "Behinderungsanzeige"],
@@ -899,16 +951,44 @@ with tab_vob:
         key="vob_typ"
     )
 
+    # ── Briefkopf-Vorlage laden ───────────────────────────────
+    def _lade_briefkopf() -> bytes:
+        try:
+            rows = db.table("dateien").select("datei_url").eq("projekt_id", pid).eq("kategorie", "Briefkopf").execute().data
+            if not rows:
+                return None
+            url = rows[0]["datei_url"]
+            if url.startswith("data:"):
+                import base64 as _b64
+                return _b64.b64decode(url.split(",")[1])
+            elif url.startswith("http"):
+                import requests as _req
+                return _req.get(url, timeout=8).content
+        except Exception:
+            return None
+        return None
+
     # ── Hilfsfunktion: Word-Dokument ──────────────────────────
     def _erstelle_docx(titel_dok: str, meta: dict, text: str, bilder: list = None) -> bytes:
         from docx import Document
         from docx.shared import Cm, Inches
         from docx.enum.text import WD_ALIGN_PARAGRAPH
         import io
-        doc = Document()
-        s = doc.sections[0]
-        s.left_margin = Cm(2.5); s.right_margin = Cm(2.5)
-        s.top_margin  = Cm(3.0); s.bottom_margin = Cm(2.0)
+
+        vorlage_bytes = _lade_briefkopf()
+        if vorlage_bytes:
+            doc = Document(io.BytesIO(vorlage_bytes))
+            from docx.oxml.ns import qn as _qn
+            body = doc.element.body
+            for child in list(body):
+                if child.tag != _qn('w:sectPr'):
+                    body.remove(child)
+        else:
+            doc = Document()
+            s = doc.sections[0]
+            s.left_margin = Cm(2.5); s.right_margin = Cm(2.5)
+            s.top_margin  = Cm(3.0); s.bottom_margin = Cm(2.0)
+
         h = doc.add_heading(titel_dok, 0)
         h.alignment = WD_ALIGN_PARAGRAPH.CENTER
         doc.add_paragraph()
@@ -1020,8 +1100,12 @@ with tab_vob:
                         use_container_width=True, key=f"dl_txt_{doc['id']}")
                 with c2:
                     try:
-                        meta_dok = {"Projekt": pname, "Datum": datum_str,
-                                    "Auftraggeber": meta_d.get("auftraggeber", "")}
+                        meta_dok = {
+                            "Projekt": pname,
+                            "Datum": datum_str,
+                            "Auftraggeber": meta_d.get("auftraggeber", ""),
+                            "Bauleiter": _vob_bauleiter,
+                        }
                         docx_b = _erstelle_docx(doc["titel"], meta_dok, doc["inhalt"])
                         st.download_button("Als Word (.docx)", data=docx_b,
                             file_name=f"{fname}.docx",
