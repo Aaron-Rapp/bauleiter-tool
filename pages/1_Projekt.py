@@ -2,8 +2,20 @@ import streamlit as st
 from utils.db import get_db_client
 import datetime
 import html as html_mod
-from google import genai as genai_sdk
 from utils.config import get_config
+
+def _ki_call(prompt: str) -> str:
+    api_key = get_config("GROQ_API_KEY")
+    if not api_key:
+        raise ValueError("Kein GROQ_API_KEY gesetzt.")
+    from groq import Groq
+    client = Groq(api_key=api_key)
+    resp = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=2048,
+    )
+    return resp.choices[0].message.content
 
 try:
     from streamlit_calendar import calendar as st_calendar
@@ -608,8 +620,6 @@ with tab_chat:
                     st.warning(f"Bitte {wartezeit} Sekunde(n) warten bevor du die nächste Frage sendest.")
                 else:
                     try:
-                        api_key = get_config("GEMINI_API_KEY")
-                        client = genai_sdk.Client(api_key=api_key)
                         kontext = lade_kontext()
                         verlauf = "\n".join([f"{m['rolle'].upper()}: {m['text']}"
                                              for m in st.session_state[key_verlauf][-6:]])
@@ -619,24 +629,18 @@ Wichtig: §2 Abs.5/6 VOB/B Nachtrag VOR Ausführung! §6 Abs.1 Behinderung sofor
 Projektdokumente: {kontext}
 Gespräch: {verlauf}
 Antworte auf Deutsch, kurz, §-Angabe bei Rechtsfragen, JA/NEIN + Begründung."""
-                        antwort = client.models.generate_content(
-                            model="gemini-2.0-flash", contents=prompt
-                        ).text
+                        antwort = _ki_call(prompt)
                         st.session_state[rate_key] = _time.time()
                         st.markdown(antwort)
                         st.session_state[key_verlauf].append({"rolle": "assistant", "text": antwort})
                     except Exception as e:
                         err = str(e)
-                        if ("API_KEY" in err or "api key" in err.lower()
-                                or "API_KEY_INVALID" in err or "invalid" in err.lower()
-                                or "401" in err or "403" in err or "UNAUTHENTICATED" in err
-                                or "PERMISSION_DENIED" in err):
-                            st.error("**API-Key ungültig** — Bitte GEMINI_API_KEY in den Streamlit Secrets prüfen.")
-                        elif "429" in err or "RESOURCE_EXHAUSTED" in err:
+                        if "GROQ_API_KEY" in err or "401" in err or "invalid_api_key" in err.lower():
+                            st.error("**API-Key ungültig** — Bitte GROQ_API_KEY in den Streamlit Secrets prüfen.")
+                        elif "429" in err or "rate_limit" in err.lower():
                             st.session_state[rate_key] = _time.time()
                             st.warning(
-                                "**KI-Limit erreicht** — Das kostenlose Kontingent (15 Anfragen/Min.) ist kurz erschöpft.  \n"
-                                "Bitte **60 Sekunden warten** und dann erneut versuchen.  \n"
+                                "**KI-Limit erreicht** — Bitte **60 Sekunden warten** und erneut versuchen.  \n"
                                 "Tipp: Stelle mehrere Fragen in einer Nachricht, um Anfragen zu sparen."
                             )
                         else:
@@ -923,23 +927,15 @@ with tab_vob:
 
     def _ki_fehler(e):
         err = str(e)
-        if ("API_KEY" in err or "api key" in err.lower()
-                or "API_KEY_INVALID" in err or "UNAUTHENTICATED" in err
-                or "PERMISSION_DENIED" in err or "401" in err or "403" in err):
-            st.error("**API-Key ungültig** — Bitte GEMINI_API_KEY in den Streamlit Secrets prüfen.")
-        elif "429" in err or "RESOURCE_EXHAUSTED" in err:
+        if "GROQ_API_KEY" in err or "401" in err or "invalid_api_key" in err.lower():
+            st.error("**API-Key ungültig** — Bitte GROQ_API_KEY in den Streamlit Secrets prüfen.")
+        elif "429" in err or "rate_limit" in err.lower():
             st.warning("KI-Limit erreicht — Bitte 1 Minute warten und erneut versuchen.")
         else:
             st.error(f"KI-Fehler: {err[:300]}")
 
     def _ki_generieren(prompt: str) -> str:
-        api_key = get_config("GEMINI_API_KEY")
-        if not api_key:
-            raise ValueError("Kein GEMINI_API_KEY gesetzt.")
-        client = genai_sdk.Client(api_key=api_key)
-        return client.models.generate_content(
-            model="gemini-2.0-flash", contents=prompt
-        ).text
+        return _ki_call(prompt)
 
     def _ergebnis_anzeigen(key: str, titel_dok: str, meta: dict):
         result = st.session_state.get(key)
@@ -1299,11 +1295,6 @@ with tab_bericht:
                      disabled=not bericht_erledigt.strip(), use_container_width=True):
             with st.spinner("KI erstellt Tagesbericht..."):
                 try:
-                    api_key = get_config("GEMINI_API_KEY")
-                    if not api_key:
-                        st.error("Kein GEMINI_API_KEY in der .env-Datei gesetzt.")
-                        st.stop()
-                    _tb_client = genai_sdk.Client(api_key=api_key)
                     prompt = f"""Du bist ein erfahrener Bauleiter und erstellst einen formalen Bautagesbericht.
 
 Projekt: {pname}
@@ -1321,9 +1312,7 @@ Erstelle einen formalen Bautagesbericht mit:
 5. Maßnahmen und nächste Schritte
 
 Stil: Sachlich, formell, vollständig. Auf Deutsch."""
-                    antwort = _tb_client.models.generate_content(
-                        model="gemini-2.0-flash", contents=prompt
-                    ).text
+                    antwort = _ki_call(prompt)
                     nr = get_naechste_nummer("tagesbericht")
                     titel_tb = f"Tagesbericht Nr. {nr}"
                     speichere_dokument("tagesbericht", nr, titel_tb, antwort,
@@ -1337,11 +1326,9 @@ Stil: Sachlich, formell, vollständig. Auf Deutsch."""
                     st.rerun()
                 except Exception as e:
                     err = str(e)
-                    if ("API_KEY" in err or "api key" in err.lower()
-                            or "API_KEY_INVALID" in err or "UNAUTHENTICATED" in err
-                            or "PERMISSION_DENIED" in err or "401" in err or "403" in err):
-                        st.error("**API-Key ungültig** — Bitte GEMINI_API_KEY in den Streamlit Secrets prüfen.")
-                    elif "429" in err or "RESOURCE_EXHAUSTED" in err:
+                    if "GROQ_API_KEY" in err or "401" in err or "invalid_api_key" in err.lower():
+                        st.error("**API-Key ungültig** — Bitte GROQ_API_KEY in den Streamlit Secrets prüfen.")
+                    elif "429" in err or "rate_limit" in err.lower():
                         st.warning("KI-Limit erreicht — Bitte 1 Minute warten und erneut versuchen.")
                     else:
                         st.error(f"KI-Fehler: {err[:300]}")
