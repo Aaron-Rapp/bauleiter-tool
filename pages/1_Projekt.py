@@ -2,7 +2,7 @@ import streamlit as st
 from utils.db import get_db_client
 import datetime
 import html as html_mod
-from utils.config import get_config
+from utils.config import get_config, get_name
 
 def _ki_call(prompt: str) -> str:
     api_key = get_config("GROQ_API_KEY")
@@ -1026,11 +1026,11 @@ with tab_vob:
             with c1:
                 mk_datum = st.date_input("Datum", value=datetime.date.today(), format="DD.MM.YYYY", key="mk_datum")
             with c2:
-                mk_ag = st.text_input("Auftraggeber", placeholder="z.B. Stadtwerke Konstanz GmbH", key="mk_ag")
+                mk_ag = st.text_input("Auftraggeber", value=projekt.get("auftraggeber",""), placeholder="z.B. Stadtwerke Konstanz GmbH", key="mk_ag")
 
             c3, c4 = st.columns(2)
             with c3:
-                mk_vertrag = st.text_input("Vertrags-/Auftragsnummer", placeholder="z.B. V-2026-042", key="mk_vertrag")
+                mk_vertrag = st.text_input("Vertrags-/Auftragsnummer", value=projekt.get("vertragsnummer",""), placeholder="z.B. V-2026-042", key="mk_vertrag")
             with c4:
                 mk_grundlage = st.radio("Rechtsgrundlage", ["§ 2 Abs. 5 VOB/B", "§ 2 Abs. 6 VOB/B", "§ 650b BGB"],
                                         horizontal=True, key="mk_grundlage")
@@ -1134,7 +1134,7 @@ Kein akademischer Jargon. Schreibe den vollständigen Brief aus."""
             with c1:
                 bh_datum = st.date_input("Datum der Anzeige", value=datetime.date.today(), format="DD.MM.YYYY", key="bh_datum")
             with c2:
-                bh_ag = st.text_input("Auftraggeber", placeholder="z.B. Stadtwerke Konstanz GmbH", key="bh_ag")
+                bh_ag = st.text_input("Auftraggeber", value=projekt.get("auftraggeber",""), placeholder="z.B. Stadtwerke Konstanz GmbH", key="bh_ag")
 
             c3, c4 = st.columns(2)
             with c3:
@@ -1170,7 +1170,7 @@ Kein akademischer Jargon. Schreibe den vollständigen Brief aus."""
                     placeholder="z.B. mindestens 5 Werktage", key="bh_dauer")
 
             bh_vertrag = st.text_input("Vertrags-/Auftragsnummer (optional)",
-                placeholder="z.B. V-2026-042", key="bh_vertrag")
+                value=projekt.get("vertragsnummer",""), placeholder="z.B. V-2026-042", key="bh_vertrag")
 
             if st.button("Behinderungsanzeige generieren", type="primary",
                          disabled=not bh_beschr.strip(), use_container_width=True, key="bh_btn"):
@@ -1271,6 +1271,21 @@ with tab_bericht:
                 placeholder="z.B. 18 °C, bewölkt, Wind 10 km/h",
                 key="bericht_wetter"
             )
+        col_bc, col_bd = st.columns(2)
+        with col_bc:
+            bericht_bauleiter = st.text_input(
+                "Bauleiter",
+                value=get_name(),
+                placeholder="Vor- und Nachname",
+                key="bericht_bauleiter"
+            )
+        with col_bd:
+            bericht_ag = st.text_input(
+                "Auftraggeber",
+                value=projekt.get("auftraggeber",""),
+                placeholder="z.B. Stadtwerke Konstanz GmbH",
+                key="bericht_ag"
+            )
 
         bericht_erledigt = st.text_area(
             "Was wurde heute erledigt?",
@@ -1298,14 +1313,16 @@ with tab_bericht:
                     prompt = f"""Du bist ein erfahrener Bauleiter und erstellst einen formalen Bautagesbericht.
 
 Projekt: {pname}
+Auftraggeber: {bericht_ag or 'nicht angegeben'}
 Datum: {bericht_datum.strftime('%d.%m.%Y')}
+Bauleiter: {bericht_bauleiter or 'nicht angegeben'}
 Wetter: {bericht_wetter or 'nicht angegeben'}
 Heutige Arbeiten: {bericht_erledigt}
 Probleme / Behinderungen: {bericht_probleme or 'keine'}
 Anwesende Firmen / Personal: {bericht_personal or 'nicht angegeben'}
 
 Erstelle einen formalen Bautagesbericht mit:
-1. Kopfdaten (Projekt, Datum, Wetter, Bauleiter)
+1. Kopfdaten (Projekt, Auftraggeber, Datum, Wetter, Bauleiter)
 2. Ausgeführte Arbeiten (strukturiert nach Gewerken)
 3. Probleme und Behinderungen
 4. Personalstärke / anwesende Firmen

@@ -1,6 +1,6 @@
 import streamlit as st
 from utils.db import get_db_client
-from utils.config import get_rolle, set_rolle, reset_rolle
+from utils.config import get_rolle, set_rolle, reset_rolle, get_name, set_name
 import datetime
 import html as html_mod
 
@@ -257,6 +257,12 @@ if not rolle:
         </div>
         """, unsafe_allow_html=True)
 
+        eingabe_name = st.text_input(
+            "Dein Name",
+            placeholder="z.B. Max Mustermann",
+            help="Wird in Tagesberichten und VOB-Dokumenten verwendet"
+        )
+
         ROLLEN = {
             "Bauleiter": (
                 "Alle Termine · Konflikt-Erkennung zwischen Projekten · VOB-Schriftverkehr",
@@ -293,11 +299,15 @@ if not rolle:
                     if st.button("Auswählen", key=f"rolle_{r}", use_container_width=True,
                                  type="primary"):
                         set_rolle(r)
+                        if eingabe_name.strip():
+                            set_name(eingabe_name.strip())
                         st.rerun()
             st.markdown("<div style='height:0.3rem'></div>", unsafe_allow_html=True)
     st.stop()
 
 st.session_state.rolle = rolle
+name = get_name()
+st.session_state.bauleiter_name = name
 
 if modus == "lokal":
     st.markdown("""
@@ -353,7 +363,7 @@ st.markdown(f"""
     <span style='background:white; color:#555552; padding:5px 12px;
                  border-radius:999px; font-size:0.79rem; font-weight:500;
                  border:1px solid #E8E6E2; white-space:nowrap;
-                 font-family:Inter,sans-serif;'>{html_mod.escape(rolle)}</span>
+                 font-family:Inter,sans-serif;'>{html_mod.escape((name + " · " + rolle) if name else rolle)}</span>
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -392,8 +402,13 @@ with st.expander("Neues Projekt anlegen", expanded=(len(projekte) == 0)):
         name = st.text_input("Name der Baustelle *", placeholder="z.B. Neubau Bürogebäude Konstanz")
         col1, col2 = st.columns(2)
         with col1:
-            kostenstelle = st.text_input("Kostenstelle", placeholder="z.B. KST-2026-042")
+            auftraggeber = st.text_input("Auftraggeber *", placeholder="z.B. Stadtwerke Konstanz GmbH")
         with col2:
+            vertragsnummer = st.text_input("Vertragsnummer", placeholder="z.B. V-2026-042")
+        col1b, col2b = st.columns(2)
+        with col1b:
+            kostenstelle = st.text_input("Kostenstelle", placeholder="z.B. KST-2026-042")
+        with col2b:
             anschrift = st.text_input("Anschrift", placeholder="z.B. Hauptstraße 1, 78462 Konstanz")
         col3, col4 = st.columns(2)
         with col3:
@@ -425,6 +440,8 @@ with st.expander("Neues Projekt anlegen", expanded=(len(projekte) == 0)):
 
                 eintrag = {
                     "name": name.strip(),
+                    "auftraggeber": auftraggeber.strip(),
+                    "vertragsnummer": vertragsnummer.strip(),
                     "kostenstelle": kostenstelle.strip(),
                     "anschrift": anschrift.strip(),
                     "foto_url": foto_url,
@@ -435,7 +452,27 @@ with st.expander("Neues Projekt anlegen", expanded=(len(projekte) == 0)):
                     eintrag["bauzeit_bis"] = str(bauzeit_bis)
 
                 try:
-                    db.table("projekte").insert(eintrag).execute()
+                    res = db.table("projekte").insert(eintrag).execute()
+                    new_pid = res.data[0]["id"] if res.data else None
+                    if new_pid:
+                        _default_todos = [
+                            ("Leitungspläne einholen",                          "Arbeitsvorbereitung"),
+                            ("Bestandsaufnahme durchführen",                     "Arbeitsvorbereitung"),
+                            ("Sicherheitsunterweisung der Arbeiter vorbereiten", "Arbeitsvorbereitung"),
+                            ("Sicherheitseinweisung für die Arbeiter durchführen","Beginn der Baustelle"),
+                            ("Abnahmeaufforderung stellen",                      "Abnahme"),
+                            ("Abnahme durchführen",                              "Abnahme"),
+                        ]
+                        for titel, phase in _default_todos:
+                            try:
+                                db.table("todos").insert({
+                                    "projekt_id": new_pid,
+                                    "titel": titel,
+                                    "phase": phase,
+                                    "erledigt": False,
+                                }).execute()
+                            except Exception:
+                                pass
                     st.success(f"'{name}' angelegt!")
                     st.rerun()
                 except Exception as e:
