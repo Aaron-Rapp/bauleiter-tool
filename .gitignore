@@ -9,3 +9,4 @@ bauleiter_lokal.db
 .bauleiter_rolle.json
 .claude/
 .vscode/
+migrate_to_supabase.py

@@ -218,10 +218,12 @@ st.markdown("<hr style='margin:0.3rem 0 0.5rem 0; border-color:#E8E6E2;'>", unsa
 anschrift = projekt.get("anschrift", "").strip()
 if anschrift:
     wetter_key = f"wetter_{pid}"
+    coords_key = f"coords_{pid}"
     if wetter_key not in st.session_state:
         try:
             from utils.wetter import geocode, get_wetter
             coords = geocode(anschrift)
+            st.session_state[coords_key] = coords or False
             if coords:
                 w = get_wetter(coords[0], coords[1])
                 st.session_state[wetter_key] = w
@@ -229,6 +231,7 @@ if anschrift:
                 st.session_state[wetter_key] = {"ok": False}
         except Exception:
             st.session_state[wetter_key] = {"ok": False}
+            st.session_state[coords_key] = False
 
     w = st.session_state.get(wetter_key, {})
     if w.get("ok"):
@@ -256,7 +259,7 @@ if _HAS_FOLIUM and anschrift:
             st.session_state[coords_key] = geocode(anschrift) or False
         except Exception:
             st.session_state[coords_key] = False
-    coords = st.session_state.get(coords_key)
+    coords = st.session_state.get(coords_key, False)
     if coords:
         with st.expander("Baustellenstandort anzeigen"):
             m = _folium.Map(location=coords, zoom_start=16, tiles="CartoDB positron")
@@ -756,7 +759,7 @@ with tab_kalender:
     }
 
     col_leg1, col_leg2, col_leg3 = st.columns(3)
-    for col, (k, (label, bg, fg, _)) in zip([col_leg1, col_leg2, col_leg3], FARBEN.items()):
+    for col, (k, (label, bg, fg, acc_)) in zip([col_leg1, col_leg2, col_leg3], FARBEN.items()):
         with col:
             st.markdown(
                 f"<div style='background:{bg};color:{fg};padding:8px 14px;border-radius:8px;"
@@ -786,7 +789,7 @@ with tab_kalender:
                 db.table("kalender").insert({
                     "projekt_id": pid, "titel": t_titel.strip(),
                     "datum": str(t_datum),
-                    "datum_bis": str(t_datum_bis) if t_datum_bis else "",
+                    "datum_bis": str(t_datum_bis) if t_datum_bis else None,
                     "uhrzeit_von": t_von, "uhrzeit_bis": t_bis,
                     "kategorie": t_kat, "beschreibung": t_beschr
                 }).execute()
@@ -822,7 +825,6 @@ with tab_kalender:
                 "height": 560,
                 "editable": False,
                 "selectable": False,
-                "eventClick": {"enabled": True},
             }
             cal_result = st_calendar(events=events, options=cal_opts, key=f"cal_{pid}")
             # Geklickten Termin anzeigen
