@@ -452,7 +452,15 @@ with st.expander("Neues Projekt anlegen", expanded=(len(projekte) == 0)):
                     eintrag["bauzeit_bis"] = str(bauzeit_bis)
 
                 try:
-                    res = db.table("projekte").insert(eintrag).execute()
+                    try:
+                        res = db.table("projekte").insert(eintrag).execute()
+                    except Exception as _e:
+                        if "auftraggeber" in str(_e) or "vertragsnummer" in str(_e):
+                            eintrag.pop("auftraggeber", None)
+                            eintrag.pop("vertragsnummer", None)
+                            res = db.table("projekte").insert(eintrag).execute()
+                        else:
+                            raise
                     new_pid = res.data[0]["id"] if res.data else None
                     if new_pid:
                         _default_todos = [

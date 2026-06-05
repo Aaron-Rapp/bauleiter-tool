@@ -30,6 +30,8 @@ def _init_sqlite():
             name TEXT NOT NULL,
             kostenstelle TEXT DEFAULT '',
             anschrift TEXT DEFAULT '',
+            auftraggeber TEXT DEFAULT '',
+            vertragsnummer TEXT DEFAULT '',
             bauzeit_von TEXT,
             bauzeit_bis TEXT,
             foto_url TEXT DEFAULT '',
@@ -77,12 +79,17 @@ def _init_sqlite():
         );
     """)
     conn.commit()
-    # Migration: datum_bis für bestehende DBs hinzufügen
-    try:
-        conn.execute("ALTER TABLE kalender ADD COLUMN datum_bis TEXT DEFAULT ''")
-        conn.commit()
-    except Exception:
-        pass
+    # Migration: neue Spalten für bestehende DBs hinzufügen
+    for sql in [
+        "ALTER TABLE kalender  ADD COLUMN datum_bis     TEXT DEFAULT ''",
+        "ALTER TABLE projekte  ADD COLUMN auftraggeber  TEXT DEFAULT ''",
+        "ALTER TABLE projekte  ADD COLUMN vertragsnummer TEXT DEFAULT ''",
+    ]:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except Exception:
+            pass
     conn.close()
 
 
