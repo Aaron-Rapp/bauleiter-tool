@@ -625,17 +625,20 @@ Antworte auf Deutsch, kurz, §-Angabe bei Rechtsfragen, JA/NEIN + Begründung.""
                         st.session_state[key_verlauf].append({"rolle": "assistant", "text": antwort})
                     except Exception as e:
                         err = str(e)
-                        if "429" in err or "quota" in err.lower() or "RESOURCE_EXHAUSTED" in err:
+                        if ("API_KEY" in err or "api key" in err.lower()
+                                or "API_KEY_INVALID" in err or "invalid" in err.lower()
+                                or "401" in err or "403" in err or "UNAUTHENTICATED" in err
+                                or "PERMISSION_DENIED" in err):
+                            st.error("**API-Key ungültig** — Bitte GEMINI_API_KEY in den Streamlit Secrets prüfen.")
+                        elif "429" in err or "RESOURCE_EXHAUSTED" in err:
                             st.session_state[rate_key] = _time.time()
                             st.warning(
                                 "**KI-Limit erreicht** — Das kostenlose Kontingent (15 Anfragen/Min.) ist kurz erschöpft.  \n"
                                 "Bitte **60 Sekunden warten** und dann erneut versuchen.  \n"
                                 "Tipp: Stelle mehrere Fragen in einer Nachricht, um Anfragen zu sparen."
                             )
-                        elif "API_KEY" in err or "api key" in err.lower():
-                            st.error("API-Key ungültig — Prüfe GEMINI_API_KEY in der .env-Datei.")
                         else:
-                            st.error(f"KI-Fehler: {err[:200]}")
+                            st.error(f"KI-Fehler: {err[:300]}")
 
     col_clear, _ = st.columns([2, 8])
     with col_clear:
