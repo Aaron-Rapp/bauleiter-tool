@@ -5,17 +5,13 @@ import html as html_mod
 from utils.config import get_config, get_name
 
 def _ki_call(prompt: str) -> str:
-    api_key = get_config("GROQ_API_KEY")
+    api_key = get_config("GEMINI_API_KEY")
     if not api_key:
-        raise ValueError("Kein GROQ_API_KEY gesetzt.")
-    from groq import Groq
-    client = Groq(api_key=api_key)
-    resp = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=2048,
-    )
-    return resp.choices[0].message.content
+        raise ValueError("Kein GEMINI_API_KEY gesetzt.")
+    from google import genai
+    client = genai.Client(api_key=api_key)
+    resp = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+    return resp.text
 
 try:
     from streamlit_calendar import calendar as st_calendar
@@ -304,9 +300,9 @@ def upload_datei(datei_bytes: bytes, pfad: str, content_type: str = "application
             pfad, datei_bytes, {"content-type": content_type, "upsert": "true"}
         )
         return db.storage.from_("bauleiter-dateien").get_public_url(pfad)
-    except Exception as e:
-        st.error(f"Upload fehlgeschlagen: {e}\n\nTipp: Bucket 'bauleiter-dateien' in Supabase als Public anlegen.")
-        return ""
+    except Exception:
+        import base64 as _b64fb
+        return f"data:{content_type};base64," + _b64fb.b64encode(datei_bytes).decode()
 
 def get_unterordner(kategorie: str) -> list:
     try:
@@ -389,12 +385,13 @@ with tab_bilder:
     if bild_datei:
         if st.button("Bild speichern", type="primary", key="bild_save"):
             ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            _bild_bytes = bild_datei.getvalue()
             if modus == "supabase":
                 pfad = f"{pid}/Bilder/{akt_ordner}/{ts}.jpg"
-                url = upload_datei(bild_datei.getvalue(), pfad, "image/jpeg")
+                url = upload_datei(_bild_bytes, pfad, "image/jpeg")
             else:
                 import base64
-                url = "data:image/jpeg;base64," + base64.b64encode(bild_datei.getvalue()).decode()
+                url = "data:image/jpeg;base64," + base64.b64encode(_bild_bytes).decode()
             if url:
                 db.table("dateien").insert({
                     "projekt_id": pid, "kategorie": "Bilder",
@@ -462,23 +459,24 @@ with tab_plaene:
                 st.success(f"Ordner '{neu2}' angelegt!")
                 st.rerun()
 
-    plan_up = st.file_uploader("Plan hochladen (PDF, DWG, PNG, JPG)", type=["pdf","dwg","png","jpg","jpeg"], key="plan_up")
-    if plan_up and st.button("Plan speichern", type="primary", key="plan_save"):
-        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        pfad = f"{pid}/Plaene/{plan_ord}/{ts}_{plan_up.name}"
-        if modus == "supabase":
-            url = upload_datei(plan_up.getvalue(), pfad)
-        else:
-            import base64 as _b64mod
-            _mime = "application/pdf" if plan_up.name.lower().endswith(".pdf") else "application/octet-stream"
-            url = f"data:{_mime};base64," + _b64mod.b64encode(plan_up.getvalue()).decode()
-        if url:
-            db.table("dateien").insert({
-                "projekt_id": pid, "kategorie": "Plaene",
-                "unterordner": plan_ord, "datei_name": plan_up.name, "datei_url": url
-            }).execute()
-            st.success("Plan gespeichert!")
-            st.rerun()
+    with st.form("plan_form", clear_on_submit=True):
+        plan_up = st.file_uploader("Plan hochladen (PDF, DWG, PNG, JPG)", type=["pdf","dwg","png","jpg","jpeg"])
+        if st.form_submit_button("Plan speichern", type="primary") and plan_up:
+            ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            pfad = f"{pid}/Plaene/{plan_ord}/{ts}_{plan_up.name}"
+            if modus == "supabase":
+                url = upload_datei(plan_up.getvalue(), pfad)
+            else:
+                import base64 as _b64mod
+                _mime = "application/pdf" if plan_up.name.lower().endswith(".pdf") else "application/octet-stream"
+                url = f"data:{_mime};base64," + _b64mod.b64encode(plan_up.getvalue()).decode()
+            if url:
+                db.table("dateien").insert({
+                    "projekt_id": pid, "kategorie": "Plaene",
+                    "unterordner": plan_ord, "datei_name": plan_up.name, "datei_url": url
+                }).execute()
+                st.success("Plan gespeichert!")
+                st.rerun()
 
     st.markdown("---")
     try:
@@ -549,47 +547,49 @@ with tab_vertraege:
         Inhalt weglassen — die App befüllt das Dokument automatisch.
         </div>""", unsafe_allow_html=True)
 
-        bk_up = st.file_uploader("Word-Vorlage hochladen (.docx)", type=["docx"], key="briefkopf_up",
-                                  help="Word-Dokument mit Briefkopf, Logo und Adresse")
-        if bk_up and st.button("Vorlage speichern", type="primary", key="briefkopf_save"):
-            try:
-                db.table("dateien").delete().eq("projekt_id", pid).eq("kategorie", "Briefkopf").execute()
-            except Exception:
-                pass
-            import base64 as _b64mod
-            _bk_mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            _bk_url = f"data:{_bk_mime};base64," + _b64mod.b64encode(bk_up.getvalue()).decode()
-            db.table("dateien").insert({
-                "projekt_id": pid, "kategorie": "Briefkopf",
-                "unterordner": "", "datei_name": bk_up.name, "datei_url": _bk_url
-            }).execute()
-            st.success(f"Vorlage '{bk_up.name}' gespeichert!")
-            st.rerun()
+        with st.form("briefkopf_form", clear_on_submit=True):
+            bk_up = st.file_uploader("Word-Vorlage hochladen (.docx)", type=["docx"],
+                                      help="Word-Dokument mit Briefkopf, Logo und Adresse")
+            if st.form_submit_button("Vorlage speichern", type="primary") and bk_up:
+                try:
+                    db.table("dateien").delete().eq("projekt_id", pid).eq("kategorie", "Briefkopf").execute()
+                except Exception:
+                    pass
+                import base64 as _b64mod
+                _bk_mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                _bk_url = f"data:{_bk_mime};base64," + _b64mod.b64encode(bk_up.getvalue()).decode()
+                db.table("dateien").insert({
+                    "projekt_id": pid, "kategorie": "Briefkopf",
+                    "unterordner": "", "datei_name": bk_up.name, "datei_url": _bk_url
+                }).execute()
+                st.success(f"Vorlage '{bk_up.name}' gespeichert!")
+                st.rerun()
 
     st.markdown("---")
-    vert_up = st.file_uploader("Dokument hochladen (PDF, Word)", type=["pdf","docx","doc"], key="vert_up")
-    if vert_up and st.button("Speichern", type="primary", key="vert_save"):
-        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        pfad = f"{pid}/Vertraege/{ts}_{vert_up.name}"
-        if modus == "supabase":
-            url = upload_datei(vert_up.getvalue(), pfad)
-        else:
-            import base64 as _b64mod
-            _ext = vert_up.name.lower()
-            if _ext.endswith(".pdf"):
-                _mime = "application/pdf"
-            elif _ext.endswith(".docx"):
-                _mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    with st.form("vertrag_form", clear_on_submit=True):
+        vert_up = st.file_uploader("Dokument hochladen (PDF, Word)", type=["pdf","docx","doc"])
+        if st.form_submit_button("Speichern", type="primary") and vert_up:
+            ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            pfad = f"{pid}/Vertraege/{ts}_{vert_up.name}"
+            if modus == "supabase":
+                url = upload_datei(vert_up.getvalue(), pfad)
             else:
-                _mime = "application/octet-stream"
-            url = f"data:{_mime};base64," + _b64mod.b64encode(vert_up.getvalue()).decode()
-        if url:
-            db.table("dateien").insert({
-                "projekt_id": pid, "kategorie": "Vertraege",
-                "unterordner": "", "datei_name": vert_up.name, "datei_url": url
-            }).execute()
-            st.success("Dokument gespeichert!")
-            st.rerun()
+                import base64 as _b64mod
+                _ext = vert_up.name.lower()
+                if _ext.endswith(".pdf"):
+                    _mime = "application/pdf"
+                elif _ext.endswith(".docx"):
+                    _mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                else:
+                    _mime = "application/octet-stream"
+                url = f"data:{_mime};base64," + _b64mod.b64encode(vert_up.getvalue()).decode()
+            if url:
+                db.table("dateien").insert({
+                    "projekt_id": pid, "kategorie": "Vertraege",
+                    "unterordner": "", "datei_name": vert_up.name, "datei_url": url
+                }).execute()
+                st.success("Dokument gespeichert!")
+                st.rerun()
 
     st.markdown("---")
     try:
@@ -692,8 +692,8 @@ Antworte auf Deutsch, kurz, §-Angabe bei Rechtsfragen, JA/NEIN + Begründung.""
                         st.session_state[key_verlauf].append({"rolle": "assistant", "text": antwort})
                     except Exception as e:
                         err = str(e)
-                        if "GROQ_API_KEY" in err or "401" in err or "invalid_api_key" in err.lower():
-                            st.error("**API-Key ungültig** — Bitte GROQ_API_KEY in den Streamlit Secrets prüfen.")
+                        if "GEMINI_API_KEY" in err or "401" in err or "invalid_api_key" in err.lower() or "API_KEY_INVALID" in err:
+                            st.error("**API-Key ungültig** — Bitte GEMINI_API_KEY in den Streamlit Secrets prüfen.")
                         elif "429" in err or "rate_limit" in err.lower():
                             st.session_state[rate_key] = _time.time()
                             st.warning(
@@ -1035,8 +1035,8 @@ with tab_vob:
 
     def _ki_fehler(e):
         err = str(e)
-        if "GROQ_API_KEY" in err or "401" in err or "invalid_api_key" in err.lower():
-            st.error("**API-Key ungültig** — Bitte GROQ_API_KEY in den Streamlit Secrets prüfen.")
+        if "GEMINI_API_KEY" in err or "401" in err or "invalid_api_key" in err.lower() or "API_KEY_INVALID" in err:
+            st.error("**API-Key ungültig** — Bitte GEMINI_API_KEY in den Streamlit Secrets prüfen.")
         elif "429" in err or "rate_limit" in err.lower():
             st.warning("KI-Limit erreicht — Bitte 1 Minute warten und erneut versuchen.")
         else:
@@ -1474,8 +1474,8 @@ Stil: Sachlich, formell, vollständig. Auf Deutsch."""
                     st.rerun()
                 except Exception as e:
                     err = str(e)
-                    if "GROQ_API_KEY" in err or "401" in err or "invalid_api_key" in err.lower():
-                        st.error("**API-Key ungültig** — Bitte GROQ_API_KEY in den Streamlit Secrets prüfen.")
+                    if "GEMINI_API_KEY" in err or "401" in err or "invalid_api_key" in err.lower() or "API_KEY_INVALID" in err:
+                        st.error("**API-Key ungültig** — Bitte GEMINI_API_KEY in den Streamlit Secrets prüfen.")
                     elif "429" in err or "rate_limit" in err.lower():
                         st.warning("KI-Limit erreicht — Bitte 1 Minute warten und erneut versuchen.")
                     else:

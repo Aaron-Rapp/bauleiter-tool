@@ -3,7 +3,7 @@
 ## Wer du bist und was du machst
 Du bist Claude Code und arbeitest autonom an einer Streamlit Web-App für Bauleiter.
 Aaron Rapp ist Masterstudent Bauingenieurwesen an der HTWG Konstanz.
-Präsentation der App: **18.06.2026** in der Vorlesung "Digitalisierung im Bauwesen" bei Prof. Dr. Bühler.
+Präsentation der App: **25.06.2026** (online) in der Vorlesung "Digitalisierung im Bauwesen" bei Prof. Dr. Bühler.
 
 ## Was die App ist
 Ein Bauleiter-Tool mit:

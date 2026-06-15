@@ -249,12 +249,24 @@ def get_db_client():
     """
     Gibt Supabase-Client zurück wenn verfügbar und funktionierend,
     sonst lokalen SQLite-Client.
+    Prüft auch Schreibzugriff: RLS-gesperrte Supabase-Projekte fallen auf SQLite zurück.
     """
     try:
         from utils.supabase_client import get_client
+        import uuid as _uuid
         db = get_client()
-        # Verbindungstest per SELECT (kein Schreibzugriff nötig)
+        # SELECT-Test
         db.table("projekte").select("id").limit(1).execute()
+        # Schreibzugriff-Test: Mini-INSERT + DELETE mit ungültiger ID
+        # Schlägt bei RLS-Sperre mit 42501 fehl → SQLite-Fallback
+        _test_id = str(_uuid.uuid4())
+        try:
+            db.table("projekte").insert({"id": _test_id, "name": "__test__"}).execute()
+            db.table("projekte").delete().eq("id", _test_id).execute()
+        except Exception as _we:
+            if "42501" in str(_we) or "row-level security" in str(_we).lower():
+                return LokalerClient(), "lokal"
+            # Andere Fehler (NOT NULL etc.) → Schreibzugriff ist da, Schema fehlt
         return db, "supabase"
     except Exception:
         return LokalerClient(), "lokal"

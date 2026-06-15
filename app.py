@@ -423,6 +423,7 @@ with st.expander("Neues Projekt anlegen", expanded=(len(projekte) == 0)):
                 foto_url = ""
                 bild_datei = foto_kamera or foto_upload
                 if bild_datei:
+                    import base64 as _b64foto
                     if modus == "supabase":
                         try:
                             ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -433,10 +434,9 @@ with st.expander("Neues Projekt anlegen", expanded=(len(projekte) == 0)):
                             )
                             foto_url = db.storage.from_("bauleiter-dateien").get_public_url(pfad)
                         except Exception:
-                            foto_url = ""
+                            foto_url = "data:image/jpeg;base64," + _b64foto.b64encode(bild_datei.getvalue()).decode()
                     else:
-                        import base64
-                        foto_url = "data:image/jpeg;base64," + base64.b64encode(bild_datei.getvalue()).decode()
+                        foto_url = "data:image/jpeg;base64," + _b64foto.b64encode(bild_datei.getvalue()).decode()
 
                 eintrag = {
                     "name": name.strip(),
