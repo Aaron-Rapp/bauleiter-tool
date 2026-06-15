@@ -659,7 +659,7 @@ with tab_chat:
 
     def lade_kontext() -> str:
         try:
-            alle = db.table("dateien").select("datei_name, kategorie").eq("projekt_id", pid).neq("datei_name", ".ordner").execute().data
+            alle = db.table("dateien").select("datei_name, kategorie, datei_url").eq("projekt_id", pid).neq("datei_name", ".ordner").execute().data
             if not alle:
                 return "Keine Dokumente vorhanden."
             gruppen = {}
@@ -668,7 +668,37 @@ with tab_chat:
             zeilen = []
             for kat, namen in gruppen.items():
                 zeilen.append(f"{kat}: {', '.join(namen)}")
-            return "Dokumente im Projekt:\n" + "\n".join(zeilen)
+            kontext = "Dokumente im Projekt:\n" + "\n".join(zeilen)
+            # Vertragstext extrahieren und der KI übergeben
+            for v in [d for d in alle if d.get("kategorie") == "Vertraege" and d.get("datei_url")][:2]:
+                try:
+                    import base64 as _b64ctx, io as _io_ctx
+                    url = v["datei_url"]
+                    if url.startswith("data:"):
+                        raw = _b64ctx.b64decode(url.split(",")[1])
+                    elif url.startswith("http"):
+                        import requests as _rq
+                        raw = _rq.get(url, timeout=5).content
+                    else:
+                        continue
+                    name = v["datei_name"].lower()
+                    vtext = ""
+                    if name.endswith(".docx"):
+                        from docx import Document as _DocCtx
+                        vtext = "\n".join(p.text for p in _DocCtx(_io_ctx.BytesIO(raw)).paragraphs if p.text.strip())
+                    elif name.endswith(".txt"):
+                        vtext = raw.decode("utf-8", errors="replace")
+                    elif name.endswith(".pdf"):
+                        try:
+                            from pdfminer.high_level import extract_text as _pdf_ex
+                            vtext = _pdf_ex(_io_ctx.BytesIO(raw))
+                        except ImportError:
+                            pass
+                    if vtext:
+                        kontext += f"\n\n--- VERTRAGSINHALT: {v['datei_name']} ---\n{vtext[:8000]}"
+                except Exception:
+                    pass
+            return kontext
         except Exception:
             return ""
 
@@ -987,9 +1017,9 @@ with tab_vob:
     # ── Hilfsfunktion: Word-Dokument ──────────────────────────
     def _erstelle_docx(titel_dok: str, meta: dict, text: str, bilder: list = None) -> bytes:
         from docx import Document
-        from docx.shared import Cm, Inches
+        from docx.shared import Cm, Inches, Pt
         from docx.enum.text import WD_ALIGN_PARAGRAPH
-        import io
+        import io, re as _re_md
 
         vorlage_bytes = _lade_briefkopf()
         if vorlage_bytes:
@@ -1003,41 +1033,58 @@ with tab_vob:
             doc = Document()
             s = doc.sections[0]
             s.left_margin = Cm(2.5); s.right_margin = Cm(2.5)
-            s.top_margin  = Cm(3.0); s.bottom_margin = Cm(2.0)
+            s.top_margin = Cm(2.5); s.bottom_margin = Cm(2.0)
+
+        try:
+            doc.styles['Normal'].paragraph_format.space_before = Pt(0)
+            doc.styles['Normal'].paragraph_format.space_after = Pt(3)
+        except Exception:
+            pass
+
+        def _p(txt=""):
+            para = doc.add_paragraph(txt)
+            para.paragraph_format.space_before = Pt(0)
+            para.paragraph_format.space_after = Pt(3)
+            return para
 
         h = doc.add_heading(titel_dok, 0)
         h.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        doc.add_paragraph()
+        h.paragraph_format.space_after = Pt(8)
         for k, v in meta.items():
-            p = doc.add_paragraph()
-            p.add_run(k + ": ").bold = True
-            p.add_run(v)
-        doc.add_paragraph()
-        doc.add_paragraph("─" * 60)
-        doc.add_paragraph()
-        import re as _re_md
+            pm = _p()
+            pm.add_run(k + ": ").bold = True
+            pm.add_run(v)
+        _p("─" * 60)
+
+        text = _re_md.sub(r'\n{3,}', '\n\n', text.strip())
+        prev_empty = False
         for zeile in text.split("\n"):
             z = zeile.strip()
             if not z:
-                doc.add_paragraph()
-            elif z.startswith("## "):
+                if not prev_empty:
+                    _p()
+                prev_empty = True
+                continue
+            prev_empty = False
+            if z.startswith("## "):
                 doc.add_heading(z[3:], 3)
             elif z.startswith("# "):
                 doc.add_heading(z[2:], 2)
             elif "**" in z:
                 p2 = doc.add_paragraph()
+                p2.paragraph_format.space_before = Pt(0)
+                p2.paragraph_format.space_after = Pt(3)
                 for _i, _part in enumerate(_re_md.split(r'\*\*(.+?)\*\*', z)):
                     if _part:
                         p2.add_run(_part).bold = (_i % 2 == 1)
             else:
-                doc.add_paragraph(z)
-        doc.add_paragraph()
-        doc.add_paragraph("─" * 60)
-        doc.add_paragraph()
-        unt = doc.add_paragraph()
+                _p(z)
+
+        _p("─" * 60)
+        unt = _p()
         unt.add_run("Ort, Datum: ").bold = True
         unt.add_run("_________________________")
-        unt2 = doc.add_paragraph()
+        unt2 = _p()
         unt2.add_run("Unterschrift Bauleiter: ").bold = True
         unt2.add_run("_________________________")
         if bilder:
@@ -1045,9 +1092,8 @@ with tab_vob:
             doc.add_heading("Foto-Anhang", 2)
             for i, bild_bytes in enumerate(bilder, 1):
                 try:
-                    doc.add_paragraph(f"Foto {i}:")
+                    _p(f"Foto {i}:")
                     doc.add_picture(io.BytesIO(bild_bytes), width=Inches(5.5))
-                    doc.add_paragraph()
                 except Exception:
                     pass
         buf = io.BytesIO(); doc.save(buf); return buf.getvalue()

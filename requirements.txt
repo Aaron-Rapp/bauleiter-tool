@@ -8,3 +8,4 @@ streamlit-pdf-viewer>=0.0.14
 streamlit-folium>=0.20.0
 folium>=0.16.0
 requests>=2.28.0
+pdfminer.six>=20221105
