@@ -1015,17 +1015,20 @@ with tab_vob:
         doc.add_paragraph()
         doc.add_paragraph("─" * 60)
         doc.add_paragraph()
+        import re as _re_md
         for zeile in text.split("\n"):
             z = zeile.strip()
             if not z:
                 doc.add_paragraph()
-            elif z.startswith("**") and z.endswith("**"):
-                p2 = doc.add_paragraph(z.replace("**", ""))
-                if p2.runs: p2.runs[0].bold = True
-            elif z.startswith("# "):
-                doc.add_heading(z[2:], 2)
             elif z.startswith("## "):
                 doc.add_heading(z[3:], 3)
+            elif z.startswith("# "):
+                doc.add_heading(z[2:], 2)
+            elif "**" in z:
+                p2 = doc.add_paragraph()
+                for _i, _part in enumerate(_re_md.split(r'\*\*(.+?)\*\*', z)):
+                    if _part:
+                        p2.add_run(_part).bold = (_i % 2 == 1)
             else:
                 doc.add_paragraph(z)
         doc.add_paragraph()
@@ -1183,52 +1186,19 @@ with tab_vob:
                          disabled=not mk_beschr.strip(), use_container_width=True, key="mk_btn"):
                 with st.spinner("Erstelle Mehrkostenanzeige nach VOB/B..."):
                     try:
-                        prompt = f"""Du bist ein erfahrener Bauleiter und Baufachmann mit umfassenden Kenntnissen
-der VOB/B. Erstelle eine rechtssichere, professionelle Mehrkostenanzeige.
+                        prompt = f"""Erstelle eine rechtssichere Mehrkostenanzeige nach {mk_grundlage} (VOB/B).
 
-PFLICHTSTRUKTUR nach VOB/B (exakt einhalten):
+Auftragnehmer: {_vob_bauleiter}, Bauleitung {pname}
+Auftraggeber: {mk_ag or 'Auftraggeber'}
+Datum: {mk_datum.strftime('%d.%m.%Y')}
+Auftrag: {mk_vertrag or '–'}
+Sachverhalt: {mk_beschr}
+Voraussichtliche Mehrkosten: {mk_betrag or 'werden noch ermittelt'}
 
-1. BRIEFKOPF
-   - Auftragnehmer / Absender: {_vob_bauleiter}, Bauleitung Projekt {pname}
-   - Empfänger/Auftraggeber: {mk_ag or 'Auftraggeber'}
-   - Datum: {mk_datum.strftime('%d.%m.%Y')}
-   - Betreff: "Mehrkostenanzeige gem. {mk_grundlage} – Projekt: {pname}{' – Auftrag ' + mk_vertrag if mk_vertrag else ''}"
+Struktur: Briefkopf → Betreff "Mehrkostenanzeige gem. {mk_grundlage} – {pname}" → Anrede → Sachverhalt (was vereinbart / was abweicht) → Rechtsgrundlage → Mehrkosten-Ankündigung mit Vorbehalt → Aufforderung schriftliche Beauftragung VOR Ausführung (Frist 5 Werktage) → Grußformel.
 
-2. ANREDE
-   - "Sehr geehrte Damen und Herren,"
-
-3. SACHVERHALT (Pflichtabschnitt)
-   - Konkreter Vertragsinhalt: Was war ursprünglich vereinbart?
-   - Abweichung/Änderung: Was ist anders/neu?
-   - Datum der Feststellung der Abweichung
-   - Betroffene Leistungsposition(en)
-
-4. RECHTLICHE GRUNDLAGE
-   - {mk_grundlage} — kurze Erklärung warum diese Norm greift
-   - Falls § 2 Abs. 5 VOB/B: Leistung wurde geändert angeordnet oder ist geändert erforderlich
-   - Falls § 2 Abs. 6 VOB/B: Leistung war nicht im Vertrag enthalten, ist aber erforderlich
-
-5. ANKÜNDIGUNG DER MEHRKOSTEN
-   - Voraussichtliche Mehrkosten: {mk_betrag or 'werden noch ermittelt'}
-   - Hinweis: Kostennachweise/Kalkulation folgen
-
-6. AUFFORDERUNG ZUR STELLUNGNAHME
-   - Bitte um schriftliche Beauftragung/Bestätigung VOR Ausführung
-   - Hinweis: Ohne schriftliche Beauftragung Vorbehalt der Vergütungspflicht
-
-7. GRUSSFORMEL + UNTERSCHRIFT
-
-INHALTLICHE GRUNDLAGE:
-{mk_beschr}
-
-WICHTIGE FORMULIERUNGEN:
-- "Hiermit zeigen wir an, dass..." (nicht "möchten mitteilen")
-- "Wir behalten uns vor, die Mehrkosten geltend zu machen"
-- "Eine detaillierte Kostenaufstellung wird nachgereicht"
-- "Wir bitten um schriftliche Beauftragung bis zum [konkretes Datum 5 Werktage]"
-
-FORMAT: Professioneller Geschäftsbrief, kein Markdown, direkte Ansprache, sachlich-bestimmt.
-Kein akademischer Jargon. Schreibe den vollständigen Brief aus."""
+Ton: sachlich-bestimmt, kein Konjunktiv. "Hiermit zeigen wir an…", "Wir behalten uns vor…"
+Format: vollständiger Geschäftsbrief, kein Markdown."""
                         antwort = _ki_generieren(prompt)
                         nr = get_naechste_nummer("mehrkostenanzeige")
                         titel_dok = f"Mehrkostenanzeige Nr. {nr}"
@@ -1316,56 +1286,22 @@ Kein akademischer Jargon. Schreibe den vollständigen Brief aus."""
                          disabled=not bh_beschr.strip(), use_container_width=True, key="bh_btn"):
                 with st.spinner("Erstelle Behinderungsanzeige nach § 6 Abs. 1 VOB/B..."):
                     try:
-                        prompt = f"""Du bist ein erfahrener Bauleiter mit umfassenden Kenntnissen der VOB/B.
-Erstelle eine rechtssichere Behinderungsanzeige gemäß § 6 Abs. 1 VOB/B.
+                        prompt = f"""Erstelle eine rechtssichere Behinderungsanzeige gem. § 6 Abs. 1 VOB/B.
 
-RECHTLICHER HINTERGRUND:
-§ 6 Abs. 1 VOB/B: "Glaubt der Auftragnehmer, in der ordnungsgemäßen Ausführung der Leistung
-behindert zu sein, so hat er es dem Auftraggeber unverzüglich schriftlich anzuzeigen."
-§ 6 Abs. 2 VOB/B: Verlängerung der Ausführungsfristen
-§ 6 Abs. 6 VOB/B: Schadensersatzanspruch bei Verschulden des AG
+Auftragnehmer: {_vob_bauleiter}, Bauleitung {pname}
+Auftraggeber: {bh_ag or 'Auftraggeber'}
+Datum der Anzeige: {bh_datum.strftime('%d.%m.%Y')}
+Beginn der Behinderung: {bh_beginn.strftime('%d.%m.%Y')}
+Ursache: {bh_ursache_typ}
+Beschreibung: {bh_beschr}
+Betroffene Leistungen: {bh_gewerke or 'laufende Arbeiten'}
+Voraussichtliche Dauer: {bh_dauer or 'derzeit nicht abschätzbar'}
+Auftrag: {bh_vertrag or '–'}
 
-PFLICHTSTRUKTUR (exakt einhalten):
+Struktur: Briefkopf → Betreff "Behinderungsanzeige gem. § 6 Abs. 1 VOB/B – {pname}" → Anrede → Anzeige der Behinderung → Sachverhalt → Auswirkungen auf Bauablauf → Forderungen: Fristverlängerung (§ 6 Abs. 2), Mehrkostenvorbehalt (§ 6 Abs. 6), Abhilfefrist 5 Werktage → Grußformel.
 
-1. BRIEFKOPF
-   - Auftragnehmer / Absender: {_vob_bauleiter}, Bauleitung Projekt {pname}
-   - Empfänger: {bh_ag or 'Auftraggeber'}
-   - Datum der Anzeige: {bh_datum.strftime('%d.%m.%Y')}
-   - Betreff: "Behinderungsanzeige gem. § 6 Abs. 1 VOB/B – Projekt: {pname}{' – Auftrag ' + bh_vertrag if bh_vertrag else ''}"
-
-2. ANREDE
-   - "Sehr geehrte Damen und Herren,"
-
-3. ANZEIGE DER BEHINDERUNG (Pflichtabschnitt)
-   - Datum des Beginns der Behinderung: {bh_beginn.strftime('%d.%m.%Y')}
-   - Klare Benennung: "Hiermit zeigen wir gemäß § 6 Abs. 1 VOB/B an, dass wir in der
-     Ausführung unserer Vertragsleistungen behindert sind."
-
-4. SACHVERHALT
-   - Art der Behinderung: {bh_ursache_typ}
-   - Genaue Beschreibung: {bh_beschr}
-   - Betroffene Leistungen: {bh_gewerke or 'Alle laufenden Arbeiten im Bereich des Projekts'}
-
-5. AUSWIRKUNGEN AUF DEN BAUABLAUF
-   - Welche Arbeiten können nicht ausgeführt werden?
-   - Wie viele Arbeitskräfte sind betroffen?
-   - Voraussichtliche Dauer: {bh_dauer or 'derzeit nicht abschätzbar'}
-
-6. FORDERUNGEN (Pflichtabschnitt)
-   - Anspruch auf Verlängerung der Ausführungsfrist gem. § 6 Abs. 2 VOB/B
-   - Vorbehalt der Geltendmachung von Mehrkosten gem. § 6 Abs. 6 VOB/B
-   - Aufforderung zur unverzüglichen Abhilfe bis [5 Werktage ab Datum]
-   - Hinweis: "Die Kosten durch die Bauzeitverlängerung werden gesondert geltend gemacht"
-
-7. GRUSSFORMEL + UNTERSCHRIFT
-
-WICHTIGE FORMULIERUNGEN:
-- "Wir behalten uns ausdrücklich vor, Mehrkosten und Schäden..."
-- "Diese Anzeige erfolgt fristwahrend und unverzüglich"
-- "Wir bitten um unverzügliche Abhilfe"
-- Kein "möchten" oder "würden gerne" — sachlich-bestimmt
-
-FORMAT: Professioneller Geschäftsbrief, kein Markdown, vollständig ausformuliert."""
+Ton: sachlich-bestimmt. "Hiermit zeigen wir an…", "Diese Anzeige erfolgt unverzüglich und fristwahrend."
+Format: vollständiger Geschäftsbrief, kein Markdown."""
                         antwort = _ki_generieren(prompt)
                         nr = get_naechste_nummer("behinderungsanzeige")
                         titel_dok = f"Behinderungsanzeige Nr. {nr}"
