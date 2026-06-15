@@ -197,6 +197,10 @@ class LokalerClient:
             # DELETE
             if hasattr(self, "_is_delete") and self._is_delete:
                 c.execute(f"DELETE FROM {self.name}{where}", vals)
+                # CASCADE für projekte: abhängige Tabellen mitlöschen
+                if self.name == "projekte" and "projekt_id" not in str(where):
+                    for dep in ["todos", "kalender", "dateien", "schriftverkehr"]:
+                        c.execute(f"DELETE FROM {dep} WHERE projekt_id NOT IN (SELECT id FROM projekte)")
                 conn.commit()
                 conn.close()
                 return LokalerClient._Result([])

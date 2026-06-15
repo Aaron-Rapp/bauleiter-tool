@@ -491,6 +491,14 @@ with tab_plaene:
                     with col_dl:
                         if p["datei_url"].startswith("http"):
                             st.markdown(f"[Download]({p['datei_url']})")
+                        elif p["datei_url"].startswith("data:"):
+                            import base64 as _b64dl2
+                            try:
+                                _fb2 = _b64dl2.b64decode(p["datei_url"].split(",")[1])
+                                st.download_button("⬇ Download", data=_fb2, file_name=p["datei_name"],
+                                                   use_container_width=True, key=f"dl_plan_{p['id']}")
+                            except Exception:
+                                pass
                     with col_del:
                         if st.button("Lösch.", key=f"del_plan_{p['id']}", help="Löschen"):
                             db.table("dateien").delete().eq("id", p["id"]).execute()
@@ -604,6 +612,14 @@ with tab_vertraege:
                     with col_dl:
                         if v["datei_url"].startswith("http"):
                             st.markdown(f"[Download]({v['datei_url']})")
+                        elif v["datei_url"].startswith("data:"):
+                            import base64 as _b64dl
+                            try:
+                                _fb = _b64dl.b64decode(v["datei_url"].split(",")[1])
+                                st.download_button("⬇ Download", data=_fb, file_name=v["datei_name"],
+                                                   use_container_width=True, key=f"dl_vert_{v['id']}")
+                            except Exception:
+                                pass
                     with col_del:
                         if st.button("Lösch.", key=f"del_vert_{v['id']}", help="Löschen"):
                             db.table("dateien").delete().eq("id", v["id"]).execute()
