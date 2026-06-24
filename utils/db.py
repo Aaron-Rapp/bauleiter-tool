@@ -30,6 +30,7 @@ def _init_sqlite():
             kostenstelle TEXT DEFAULT '',
             anschrift TEXT DEFAULT '',
             auftraggeber TEXT DEFAULT '',
+            auftraggeber_anschrift TEXT DEFAULT '',
             vertragsnummer TEXT DEFAULT '',
             bauzeit_von TEXT,
             bauzeit_bis TEXT,
@@ -83,6 +84,7 @@ def _init_sqlite():
         "ALTER TABLE kalender  ADD COLUMN datum_bis     TEXT DEFAULT ''",
         "ALTER TABLE projekte  ADD COLUMN auftraggeber  TEXT DEFAULT ''",
         "ALTER TABLE projekte  ADD COLUMN vertragsnummer TEXT DEFAULT ''",
+        "ALTER TABLE projekte  ADD COLUMN auftraggeber_anschrift TEXT DEFAULT ''",
     ]:
         try:
             conn.execute(sql)

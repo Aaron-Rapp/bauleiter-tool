@@ -197,7 +197,7 @@ hr { border-color: #E8E6E2 !important; margin: 1.1rem 0 !important; }
 }
 
 /* ── Image + Camera ─────────────────────────────── */
-[data-testid="stImage"] img { border-radius: 10px !important; }
+[data-testid="stImage"] img { width: 100% !important; height: 150px !important; object-fit: cover !important; border-radius: 10px !important; }
 .stCameraInput { border-radius: 10px !important; }
 
 /* ── Progress bar ───────────────────────────────── */
@@ -410,6 +410,11 @@ with st.expander("Neues Projekt anlegen", expanded=(len(projekte) == 0)):
             auftraggeber = st.text_input("Auftraggeber *", placeholder="z.B. Stadtwerke Konstanz GmbH")
         with col2:
             vertragsnummer = st.text_input("Vertragsnummer", placeholder="z.B. V-2026-042")
+        auftraggeber_anschrift = st.text_area(
+            "Anschrift Auftraggeber (Empfänger im VOB-Schriftverkehr)",
+            placeholder="z.B.\nStadtwerke Konstanz GmbH\nHauptstraße 1\n78462 Konstanz",
+            height=90
+        )
         col1b, col2b = st.columns(2)
         with col1b:
             kostenstelle = st.text_input("Kostenstelle", placeholder="z.B. KST-2026-042")
@@ -446,6 +451,7 @@ with st.expander("Neues Projekt anlegen", expanded=(len(projekte) == 0)):
                 eintrag = {
                     "name": name.strip(),
                     "auftraggeber": auftraggeber.strip(),
+                    "auftraggeber_anschrift": auftraggeber_anschrift.strip(),
                     "vertragsnummer": vertragsnummer.strip(),
                     "kostenstelle": kostenstelle.strip(),
                     "anschrift": anschrift.strip(),
@@ -462,6 +468,7 @@ with st.expander("Neues Projekt anlegen", expanded=(len(projekte) == 0)):
                     except Exception as _e:
                         if "auftraggeber" in str(_e) or "vertragsnummer" in str(_e):
                             eintrag.pop("auftraggeber", None)
+                            eintrag.pop("auftraggeber_anschrift", None)
                             eintrag.pop("vertragsnummer", None)
                             res = db.table("projekte").insert(eintrag).execute()
                         else:
@@ -558,39 +565,23 @@ else:
                 p = projekte[i + j]
                 with cols[j]:
                     with st.container(border=True):
-                        # Klickbares Bild: echter HTML-Button mit Query-Param-Navigation
-                        pid_safe = html_mod.escape(p["id"])
+                        # Bild via st.image — rendert base64 zuverlässig
+                        # (Streamlit filtert lange data:-URIs aus HTML-background heraus → grau)
                         if p.get("foto_url"):
-                            btn_content = ""
-                            btn_style = ("width:100%;height:148px;border:none;border-radius:10px;"
-                                         "cursor:pointer;padding:0;margin:0 0 8px 0;display:block;"
-                                         "background-image:url('" + p["foto_url"] + "');"
-                                         "background-size:cover;background-position:center;"
-                                         "transition:filter 0.2s;")
+                            try:
+                                st.image(p["foto_url"], use_container_width=True)
+                            except Exception:
+                                st.markdown(PLACEHOLDER_SVG, unsafe_allow_html=True)
                         else:
-                            btn_content = ('<svg width="48" height="48" viewBox="0 0 24 24" fill="none"'
-                                           ' stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round"'
-                                           ' stroke-linejoin="round">'
-                                           '<rect x="2" y="7" width="20" height="14" rx="2"/>'
-                                           '<path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>'
-                                           '<line x1="12" y1="12" x2="12" y2="16"/>'
-                                           '<line x1="10" y1="14" x2="14" y2="14"/>'
-                                           '</svg>')
-                            btn_style = ("width:100%;height:148px;border:none;border-radius:10px;"
-                                         "cursor:pointer;padding:0;margin:0 0 8px 0;"
-                                         "display:flex;align-items:center;justify-content:center;"
-                                         "background:linear-gradient(135deg,#eaeff5,#dde4ed);"
-                                         "transition:filter 0.2s;")
-                        st.markdown(
-                            "<form method='get' action='' style='margin:0;padding:0;'>"
-                            "<input type='hidden' name='open_project' value='" + pid_safe + "'>"
-                            "<button type='submit' style='" + btn_style + "'"
-                            " onmouseover=\"this.style.filter='brightness(0.92)'\""
-                            " onmouseout=\"this.style.filter=''\">"
-                            + btn_content +
-                            "</button></form>",
-                            unsafe_allow_html=True
-                        )
+                            st.markdown(PLACEHOLDER_SVG, unsafe_allow_html=True)
+                        # Navigation: Projekt öffnen
+                        if st.button("Projekt öffnen", key=f"open_{p['id']}",
+                                     use_container_width=True, type="primary"):
+                            st.session_state.aktives_projekt = p["id"]
+                            st.session_state.aktives_projekt_name = p["name"]
+                            st.session_state.db = db
+                            st.session_state.db_modus = modus
+                            st.switch_page("pages/1_Projekt.py")
 
                         # Fixer Textblock — immer gleiche Höhe egal wie viel Text
                         pname_safe = html_mod.escape(p['name'])
@@ -660,6 +651,7 @@ else:
                                     e_ag  = st.text_input("Auftraggeber", value=p.get("auftraggeber",""))
                                 with ea2:
                                     e_vnr = st.text_input("Vertragsnummer", value=p.get("vertragsnummer",""))
+                                e_ag_adr = st.text_area("Anschrift Auftraggeber (Schriftverkehr)", value=p.get("auftraggeber_anschrift",""), height=80)
                                 ec1, ec2 = st.columns(2)
                                 with ec1:
                                     e_kst  = st.text_input("Kostenstelle", value=p.get("kostenstelle",""))
@@ -676,6 +668,7 @@ else:
                                         upd = {
                                             "name": e_name.strip(),
                                             "auftraggeber": e_ag.strip(),
+                                            "auftraggeber_anschrift": e_ag_adr.strip(),
                                             "vertragsnummer": e_vnr.strip(),
                                             "kostenstelle": e_kst.strip(),
                                             "anschrift": e_adr.strip(),
@@ -686,7 +679,7 @@ else:
                                             db.table("projekte").update(upd).eq("id", p["id"]).execute()
                                         except Exception as _ue:
                                             if "auftraggeber" in str(_ue) or "vertragsnummer" in str(_ue):
-                                                upd.pop("auftraggeber", None); upd.pop("vertragsnummer", None)
+                                                upd.pop("auftraggeber", None); upd.pop("auftraggeber_anschrift", None); upd.pop("vertragsnummer", None)
                                                 db.table("projekte").update(upd).eq("id", p["id"]).execute()
                                             else:
                                                 raise

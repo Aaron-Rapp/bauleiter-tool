@@ -1037,7 +1037,7 @@ with tab_vob:
         return None
 
     # ── Hilfsfunktion: Word-Dokument (professionelles Brief-Layout) ──
-    def _erstelle_docx(titel_dok: str, meta: dict, text: str, bilder: list = None) -> bytes:
+    def _erstelle_docx(titel_dok: str, meta: dict, text: str, bilder: list = None, empfaenger: str = "") -> bytes:
         from docx import Document
         from docx.shared import Cm, Inches, Pt, RGBColor
         from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -1101,6 +1101,14 @@ with tab_vob:
             bottom.set(_qn('w:space'), '1');    bottom.set(_qn('w:color'), color)
             pbdr.append(bottom); pPr.append(pbdr)
             return p
+
+        # ── Empfänger-Adressblock (AG-Anschrift, oben wie im Geschäftsbrief) ──
+        if empfaenger and empfaenger.strip():
+            for _z in empfaenger.strip().split("\n"):
+                _z = _z.strip()
+                if _z:
+                    _p(_z, size=10, space_after=0)
+            _p("", space_after=14)
 
         # ── Titel + Akzentlinie ───────────────────────────────
         _p(titel_dok, bold=True, size=17, color=DARK,
@@ -1178,7 +1186,7 @@ with tab_vob:
     def _ki_generieren(prompt: str) -> str:
         return _ki_call(prompt)
 
-    def _ergebnis_anzeigen(key: str, titel_dok: str, meta: dict):
+    def _ergebnis_anzeigen(key: str, titel_dok: str, meta: dict, empfaenger: str = ""):
         result = st.session_state.get(key)
         if not result:
             return
@@ -1196,7 +1204,7 @@ with tab_vob:
         with c2:
             try:
                 docx_b = _erstelle_docx(titel_anzeige, meta, result["text"],
-                                        bilder=result.get("bilder") or [])
+                                        bilder=result.get("bilder") or [], empfaenger=empfaenger)
                 st.download_button("Als Word (.docx)", data=docx_b,
                     file_name=f"{fname}_{result.get('datum','')}.docx",
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -1331,7 +1339,8 @@ Format: vollständiger Geschäftsbrief, kein Markdown."""
                         _ki_fehler(e)
 
         _ergebnis_anzeigen(f"mk_{pid}", "Mehrkostenanzeige",
-                           {"Projekt": pname, "Bauleiter": _vob_bauleiter, "Auftraggeber": mk_ag, "Datum": str(mk_datum)})
+                           {"Projekt": pname, "Bauleiter": _vob_bauleiter, "Auftraggeber": mk_ag, "Datum": str(mk_datum)},
+                           empfaenger=projekt.get("auftraggeber_anschrift", ""))
 
         # Archiv Mehrkostenanzeigen
         _zeige_archiv("mehrkostenanzeige", "Mehrkostenanzeige")
@@ -1434,7 +1443,8 @@ Format: vollständiger Geschäftsbrief, kein Markdown."""
                         _ki_fehler(e)
 
         _ergebnis_anzeigen(f"bh_{pid}", "Behinderungsanzeige",
-                           {"Projekt": pname, "Bauleiter": _vob_bauleiter, "Auftraggeber": bh_ag, "Datum": str(bh_datum)})
+                           {"Projekt": pname, "Bauleiter": _vob_bauleiter, "Auftraggeber": bh_ag, "Datum": str(bh_datum)},
+                           empfaenger=projekt.get("auftraggeber_anschrift", ""))
 
         # Archiv Behinderungsanzeigen
         _zeige_archiv("behinderungsanzeige", "Behinderungsanzeige")
@@ -1498,11 +1508,14 @@ with tab_bericht:
             )
         col_bc, col_bd = st.columns(2)
         with col_bc:
+            # Anmelde-Namen zuverlässig vorbelegen (umgeht die value/key-Falle)
+            _bl_key = f"bericht_bauleiter_{pid}"
+            if not st.session_state.get(_bl_key) and get_name():
+                st.session_state[_bl_key] = get_name()
             bericht_bauleiter = st.text_input(
                 "Bauleiter",
-                value=get_name(),
                 placeholder="Vor- und Nachname",
-                key=f"bericht_bauleiter_{pid}"
+                key=_bl_key
             )
         with col_bd:
             bericht_ag = st.text_input(
