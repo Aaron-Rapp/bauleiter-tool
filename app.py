@@ -53,6 +53,12 @@ p { color: #1A1A1A !important; }
     background: #333333 !important;
     box-shadow: 0 4px 16px rgba(0,0,0,0.18) !important;
 }
+/* Text in Primary-Buttons IMMER weiß — schlägt die globale p{color:#1A1A1A}-Regel,
+   die sonst den Button-Text (steckt in einem <p>) schwarz auf schwarz macht. */
+.stButton > button[kind="primary"] *,
+[data-testid="stBaseButton-primary"] * {
+    color: white !important;
+}
 
 /* ── Buttons — Secondary ────────────────────────── */
 .stButton > button[kind="secondary"] {
@@ -88,11 +94,10 @@ p { color: #1A1A1A !important; }
     position: relative !important;
 }
 
-/* ── Projekt-Bild-Button ────────────────────────── */
-[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stButton"]:first-child { min-height:148px!important; height:148px!important; }
-[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stButton"]:first-child > button { min-height:148px!important; height:148px!important; width:100%!important; background: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='44' height='44' viewBox='0 0 24 24' fill='none' stroke='%23C8C5BF' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='2' y='7' width='20' height='14' rx='2'/%3E%3Cpath d='M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2'/%3E%3Cline x1='12' y1='12' x2='12' y2='16'/%3E%3Cline x1='10' y1='14' x2='14' y2='14'/%3E%3C/svg%3E") center/44px no-repeat,#F5F4F1!important; border:none!important; border-radius:10px 10px 0 0!important; box-shadow:none!important; cursor:pointer!important; color:transparent!important; font-size:0!important; padding:0!important; }
-[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stButton"]:first-child > button > div { min-height:148px!important; height:148px!important; }
-[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stButton"]:first-child > button:hover { background-color:#EDECEA!important; }
+/* Hinweis: Das frühere "Projekt-Bild-Button"-CSS wurde entfernt.
+   Die Projektkacheln nutzen heute HTML-Form-Buttons mit eigenem Inline-Style.
+   Das alte :first-child-CSS machte versehentlich den ersten Button in JEDEM
+   umrandeten Container (z.B. "Auswählen" im Onboarding) unsichtbar. */
 
 /* ── Inputs ─────────────────────────────────────── */
 .stTextInput > div > div > input,

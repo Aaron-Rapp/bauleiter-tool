@@ -82,6 +82,11 @@ div[data-testid="stTabs"] div[role="tabpanel"],
 .stButton > button[kind="primary"]:hover {
     background: #333 !important; box-shadow: 0 4px 14px rgba(0,0,0,0.16) !important;
 }
+/* Text in Primary-Buttons IMMER weiß (sonst schwarz auf schwarz) */
+.stButton > button[kind="primary"] *,
+[data-testid="stBaseButton-primary"] * {
+    color: white !important;
+}
 
 /* Secondary Buttons */
 .stButton > button[kind="secondary"] {
@@ -245,17 +250,33 @@ if anschrift:
 
     w = st.session_state.get(wetter_key, {})
     if w.get("ok"):
+        from utils.wetter import wetter_icon_svg
+        _icon = wetter_icon_svg(w.get("code", 0), size=44)
         st.markdown(
-            f"""<div style='background:white; border:1px solid #E8E6E2; border-radius:10px;
-                            padding:10px 18px; margin-bottom:1rem; font-size:0.87rem; color:#444441;
-                            display:flex; align-items:center; gap:1.5rem; flex-wrap:wrap;'>
-                <span style='font-weight:700; font-size:1rem; color:#1A1A1A;'>{w['temp']} °C</span>
-                <span>{w['beschreibung']}</span>
-                <span style='color:#777672;'>Wind {w['wind']} km/h</span>
-                <span style='color:#777672;'>Niederschlag {w['niederschlag']} mm</span>
+            f"""<div style='background:linear-gradient(135deg,#ffffff,#f6f8fa);
+                            border:1px solid #E8E6E2; border-radius:13px;
+                            padding:13px 20px; margin-bottom:1.1rem;
+                            display:flex; align-items:center; gap:1.15rem; flex-wrap:wrap;
+                            box-shadow:0 1px 3px rgba(0,0,0,0.04), 0 4px 14px rgba(0,0,0,0.04);'>
+                <div style='flex-shrink:0; display:flex; align-items:center;'>{_icon}</div>
+                <div style='display:flex; flex-direction:column; line-height:1.12;'>
+                    <span style='font-weight:800; font-size:1.5rem; color:#1A1A1A; letter-spacing:-0.03em;'>{w['temp']} °C</span>
+                    <span style='font-size:0.84rem; color:#777672;'>{w['beschreibung']}</span>
+                </div>
+                <div style='height:36px; width:1px; background:#E8E6E2; margin:0 0.2rem;'></div>
+                <div style='display:flex; gap:1.5rem;'>
+                    <div style='display:flex; flex-direction:column; line-height:1.2;'>
+                        <span style='color:#A8A6A2; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.06em;'>Wind</span>
+                        <span style='font-weight:600; font-size:0.92rem; color:#444441;'>{w['wind']} km/h</span>
+                    </div>
+                    <div style='display:flex; flex-direction:column; line-height:1.2;'>
+                        <span style='color:#A8A6A2; font-size:0.68rem; text-transform:uppercase; letter-spacing:0.06em;'>Niederschlag</span>
+                        <span style='font-weight:600; font-size:0.92rem; color:#444441;'>{w['niederschlag']} mm</span>
+                    </div>
+                </div>
                 <span style='font-size:0.76rem; color:#AAAAAA; margin-left:auto;
                              white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-                             max-width:220px;'>{html_mod.escape(anschrift)}</span>
+                             max-width:240px;'>{html_mod.escape(anschrift)}</span>
             </div>""",
             unsafe_allow_html=True
         )
@@ -670,7 +691,8 @@ with tab_chat:
                 zeilen.append(f"{kat}: {', '.join(namen)}")
             kontext = "Dokumente im Projekt:\n" + "\n".join(zeilen)
             # Vertragstext extrahieren und der KI übergeben
-            for v in [d for d in alle if d.get("kategorie") == "Vertraege" and d.get("datei_url")][:2]:
+            # (bis zu 6 Dokumente, je bis 20.000 Zeichen — Gemini 2.5 Flash hat sehr großen Kontext)
+            for v in [d for d in alle if d.get("kategorie") == "Vertraege" and d.get("datei_url")][:6]:
                 try:
                     import base64 as _b64ctx, io as _io_ctx
                     url = v["datei_url"]
@@ -695,7 +717,7 @@ with tab_chat:
                         except ImportError:
                             pass
                     if vtext:
-                        kontext += f"\n\n--- VERTRAGSINHALT: {v['datei_name']} ---\n{vtext[:8000]}"
+                        kontext += f"\n\n--- VERTRAGSINHALT: {v['datei_name']} ---\n{vtext[:20000]}"
                 except Exception:
                     pass
             return kontext
@@ -839,7 +861,7 @@ with tab_todos:
                     for t in phase_todos:
                         col_check, col_text, col_del = st.columns([1, 9, 1])
                         with col_check:
-                            neu = st.checkbox("", value=t["erledigt"], key=f"todo_check_{t['id']}")
+                            neu = st.checkbox("Erledigt", value=t["erledigt"], key=f"todo_check_{t['id']}", label_visibility="collapsed")
                             if neu != t["erledigt"]:
                                 db.table("todos").update({"erledigt": neu}).eq("id", t["id"]).execute()
                                 st.rerun()
@@ -1014,17 +1036,22 @@ with tab_vob:
             return None
         return None
 
-    # ── Hilfsfunktion: Word-Dokument ──────────────────────────
+    # ── Hilfsfunktion: Word-Dokument (professionelles Brief-Layout) ──
     def _erstelle_docx(titel_dok: str, meta: dict, text: str, bilder: list = None) -> bytes:
         from docx import Document
-        from docx.shared import Cm, Inches, Pt
+        from docx.shared import Cm, Inches, Pt, RGBColor
         from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.oxml.ns import qn as _qn
+        from docx.oxml import OxmlElement
         import io, re as _re_md
 
+        ACCENT = RGBColor(0xF0, 0x70, 0x30)   # R·APP-Orange für Akzentlinien
+        DARK   = RGBColor(0x1A, 0x1A, 0x1A)   # Anthrazit für Titel/Überschriften
+
         vorlage_bytes = _lade_briefkopf()
+        hat_vorlage = bool(vorlage_bytes)
         if vorlage_bytes:
             doc = Document(io.BytesIO(vorlage_bytes))
-            from docx.oxml.ns import qn as _qn
             body = doc.element.body
             for child in list(body):
                 if child.tag != _qn('w:sectPr'):
@@ -1035,67 +1062,108 @@ with tab_vob:
             s.left_margin = Cm(2.5); s.right_margin = Cm(2.5)
             s.top_margin = Cm(2.5); s.bottom_margin = Cm(2.0)
 
+        # Basis-Typografie: konsistente Schrift + angenehmer Zeilenabstand.
+        # Schriftfamilie nur setzen, wenn KEINE Kunden-Vorlage (deren Stil bleibt erhalten).
         try:
-            doc.styles['Normal'].paragraph_format.space_before = Pt(0)
-            doc.styles['Normal'].paragraph_format.space_after = Pt(3)
+            normal = doc.styles['Normal']
+            if not hat_vorlage:
+                normal.font.name = 'Calibri'
+            normal.font.size = Pt(11)
+            normal.paragraph_format.space_before = Pt(0)
+            normal.paragraph_format.space_after = Pt(6)
+            normal.paragraph_format.line_spacing = 1.18
         except Exception:
             pass
 
-        def _p(txt=""):
-            para = doc.add_paragraph(txt)
-            para.paragraph_format.space_before = Pt(0)
-            para.paragraph_format.space_after = Pt(3)
+        def _p(txt="", *, bold=False, italic=False, size=None, align=None,
+               space_after=6, space_before=0, color=None):
+            para = doc.add_paragraph()
+            para.paragraph_format.space_before = Pt(space_before)
+            para.paragraph_format.space_after = Pt(space_after)
+            if align is not None:
+                para.alignment = align
+            if txt:
+                r = para.add_run(txt)
+                r.bold = bold; r.italic = italic
+                if size:  r.font.size = Pt(size)
+                if color: r.font.color.rgb = color
             return para
 
-        h = doc.add_heading(titel_dok, 0)
-        h.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        h.paragraph_format.space_after = Pt(8)
-        for k, v in meta.items():
-            pm = _p()
-            pm.add_run(k + ": ").bold = True
-            pm.add_run(v)
-        _p("─" * 60)
+        # Dünne horizontale Linie (Absatz-Unterrand) statt Strich-Zeichen
+        def _hr(color="BFBFBF", sz="6", space_after=8, space_before=2):
+            p = doc.add_paragraph()
+            p.paragraph_format.space_before = Pt(space_before)
+            p.paragraph_format.space_after = Pt(space_after)
+            pPr = p._p.get_or_add_pPr()
+            pbdr = OxmlElement('w:pBdr')
+            bottom = OxmlElement('w:bottom')
+            bottom.set(_qn('w:val'), 'single'); bottom.set(_qn('w:sz'), sz)
+            bottom.set(_qn('w:space'), '1');    bottom.set(_qn('w:color'), color)
+            pbdr.append(bottom); pPr.append(pbdr)
+            return p
 
+        # ── Titel + Akzentlinie ───────────────────────────────
+        _p(titel_dok, bold=True, size=17, color=DARK,
+           align=WD_ALIGN_PARAGRAPH.LEFT, space_after=2)
+        _hr(color="F07030", sz="18", space_after=8, space_before=0)   # kräftige Orange-Linie
+
+        # ── Metadaten-Block: 2-spaltig (kompakt, Infos links/rechts) ──
+        meta_items = [(k, str(v)) for k, v in (meta or {}).items() if v]
+        if meta_items:
+            import math as _math
+            rows_n = _math.ceil(len(meta_items) / 2)
+            mt = doc.add_table(rows=rows_n, cols=2)
+            mt.autofit = True
+            for idx, (k, v) in enumerate(meta_items):
+                r_i = idx % rows_n      # spaltenweise: erst linke Spalte füllen, dann rechte
+                c_i = idx // rows_n
+                para = mt.rows[r_i].cells[c_i].paragraphs[0]
+                para.paragraph_format.space_after = Pt(1)
+                rk = para.add_run(f"{k}:  "); rk.bold = True; rk.font.size = Pt(10); rk.font.color.rgb = DARK
+                rv = para.add_run(v);          rv.font.size = Pt(10)
+            _hr(color="D9D9D9", sz="6", space_after=12, space_before=6)
+
+        # ── Fließtext im Blocksatz, mit Überschriften-Hierarchie ──
         text = _re_md.sub(r'\n{3,}', '\n\n', text.strip())
-        prev_empty = False
         for zeile in text.split("\n"):
             z = zeile.strip()
             if not z:
-                if not prev_empty:
-                    _p()
-                prev_empty = True
                 continue
-            prev_empty = False
             if z.startswith("## "):
-                doc.add_heading(z[3:], 3)
+                _p(z[3:], bold=True, size=12, color=DARK, space_before=10, space_after=3)
             elif z.startswith("# "):
-                doc.add_heading(z[2:], 2)
+                _p(z[2:], bold=True, size=13, color=DARK, space_before=12, space_after=4)
             elif "**" in z:
                 p2 = doc.add_paragraph()
-                p2.paragraph_format.space_before = Pt(0)
-                p2.paragraph_format.space_after = Pt(3)
+                p2.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                p2.paragraph_format.space_after = Pt(6)
                 for _i, _part in enumerate(_re_md.split(r'\*\*(.+?)\*\*', z)):
                     if _part:
                         p2.add_run(_part).bold = (_i % 2 == 1)
             else:
-                _p(z)
+                _p(z, align=WD_ALIGN_PARAGRAPH.JUSTIFY, space_after=6)
 
-        _p("─" * 60)
-        unt = _p()
-        unt.add_run("Ort, Datum: ").bold = True
-        unt.add_run("_________________________")
-        unt2 = _p()
-        unt2.add_run("Unterschrift Bauleiter: ").bold = True
-        unt2.add_run("_________________________")
+        # ── Unterschriftenzeile (zweispaltig, sauber) ─────────
+        _hr(color="D9D9D9", sz="6", space_after=20, space_before=14)
+        sig = doc.add_table(rows=2, cols=2)
+        sig.autofit = True
+        sig.rows[0].cells[0].text = "_______________________________"
+        sig.rows[0].cells[1].text = "_______________________________"
+        c10 = sig.rows[1].cells[0].paragraphs[0]; r10 = c10.add_run("Ort, Datum"); r10.font.size = Pt(9); r10.font.color.rgb = RGBColor(0x80,0x80,0x80)
+        c11 = sig.rows[1].cells[1].paragraphs[0]; r11 = c11.add_run("Unterschrift Bauleiter"); r11.font.size = Pt(9); r11.font.color.rgb = RGBColor(0x80,0x80,0x80)
+
+        # ── Foto-Anhang ───────────────────────────────────────
         if bilder:
             doc.add_page_break()
-            doc.add_heading("Foto-Anhang", 2)
+            _p("Foto-Anhang", bold=True, size=13, color=DARK, space_after=8)
+            _hr(color="D9D9D9", sz="6", space_after=12)
             for i, bild_bytes in enumerate(bilder, 1):
                 try:
-                    _p(f"Foto {i}:")
-                    doc.add_picture(io.BytesIO(bild_bytes), width=Inches(5.5))
+                    _p(f"Foto {i}", bold=True, size=10, space_after=3, space_before=8)
+                    doc.add_picture(io.BytesIO(bild_bytes), width=Inches(5.8))
                 except Exception:
                     pass
+
         buf = io.BytesIO(); doc.save(buf); return buf.getvalue()
 
     def _ki_fehler(e):
@@ -1124,7 +1192,7 @@ with tab_vob:
             fname = titel_anzeige.replace(" ", "_")
             st.download_button("Als .txt", data=result["text"],
                 file_name=f"{fname}_{result.get('datum','')}.txt", mime="text/plain",
-                use_container_width=True)
+                use_container_width=True, key=f"neu_txt_{key}")
         with c2:
             try:
                 docx_b = _erstelle_docx(titel_anzeige, meta, result["text"],
@@ -1132,7 +1200,7 @@ with tab_vob:
                 st.download_button("Als Word (.docx)", data=docx_b,
                     file_name=f"{fname}_{result.get('datum','')}.docx",
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    use_container_width=True)
+                    use_container_width=True, key=f"neu_docx_{key}")
             except Exception as ex:
                 st.error(f"Word-Fehler: {ex}")
         with c3:
@@ -1190,12 +1258,19 @@ with tab_vob:
     # MEHRKOSTENANZEIGE (§ 2 Abs. 5 / 6 VOB/B)
     # ══════════════════════════════════════════════════════════
     if vob_typ == "Mehrkostenanzeige":
-        st.markdown("""
+        mk_grundlage = st.radio("Rechtsgrundlage", ["§ 2 Abs. 5 VOB/B", "§ 2 Abs. 6 VOB/B", "§ 650b BGB"],
+                                horizontal=True, key="mk_grundlage")
+        _mk_info = {
+            "§ 2 Abs. 5 VOB/B": "Geänderte Leistung (z. B. abweichender Boden, geänderte Ausführung).",
+            "§ 2 Abs. 6 VOB/B": "Zusätzliche, im Vertrag nicht vereinbarte Leistung.",
+            "§ 650b BGB": "Änderungsanordnung im BGB-Bauvertrag; Vergütungsanpassung nach § 650c BGB.",
+        }.get(mk_grundlage, "")
+        st.markdown(f"""
         <div style='background:#F7F6F4;border:1px solid #E8E6E2;border-left:3px solid #F07030;
-                    border-radius:8px;padding:0.9rem 1.1rem;margin-bottom:1rem;
+                    border-radius:8px;padding:0.9rem 1.1rem;margin:0.6rem 0 1rem 0;
                     font-size:0.84rem;color:#444441;'>
-        <b style="color:#1A1A1A;">Rechtliche Grundlage:</b> § 2 Abs. 5 VOB/B (geänderte Leistung) oder § 2 Abs. 6 VOB/B (zusätzliche Leistung).<br>
-        <b style="color:#F07030;">Wichtig:</b> Die Mehrkostenanzeige muss <u>vor Ausführung</u> der Mehrleistung erstattet werden. Ohne Ankündigung entfällt der Vergütungsanspruch.
+        <b style="color:#1A1A1A;">Gewählte Grundlage: {mk_grundlage}</b> — {_mk_info}<br>
+        <b style="color:#F07030;">Wichtig:</b> Die Anzeige muss <u>vor Ausführung</u> erstattet werden. Ohne Ankündigung entfällt der Vergütungsanspruch.
         </div>
         """, unsafe_allow_html=True)
 
@@ -1205,13 +1280,7 @@ with tab_vob:
                 mk_datum = st.date_input("Datum", value=datetime.date.today(), format="DD.MM.YYYY", key="mk_datum")
             with c2:
                 mk_ag = st.text_input("Auftraggeber", value=projekt.get("auftraggeber",""), placeholder="z.B. Stadtwerke Konstanz GmbH", key="mk_ag")
-
-            c3, c4 = st.columns(2)
-            with c3:
-                mk_vertrag = st.text_input("Vertrags-/Auftragsnummer", value=projekt.get("vertragsnummer",""), placeholder="z.B. V-2026-042", key="mk_vertrag")
-            with c4:
-                mk_grundlage = st.radio("Rechtsgrundlage", ["§ 2 Abs. 5 VOB/B", "§ 2 Abs. 6 VOB/B", "§ 650b BGB"],
-                                        horizontal=True, key="mk_grundlage")
+            mk_vertrag = st.text_input("Vertrags-/Auftragsnummer", value=projekt.get("vertragsnummer",""), placeholder="z.B. V-2026-042", key="mk_vertrag")
 
             mk_beschr = st.text_area(
                 "Beschreibung der Mehrleistung *",
@@ -1377,22 +1446,55 @@ with tab_bericht:
     st.markdown("### Tagesbericht")
     st.caption("Erzeuge einen formalen Tagesbericht für dieses Projekt.")
 
-    # Wetterdaten vorausfüllen falls verfügbar
+    # Wetter automatisch aus der hinterlegten Baustellen-Adresse (aktueller Tag)
     wetter_vorausgefuellt = ""
     w_cached = st.session_state.get(f"wetter_{pid}", {})
+    if (not w_cached or not w_cached.get("ok")) and anschrift:
+        # Eigenständig laden, falls das obere Widget nicht griff
+        try:
+            from utils.wetter import geocode as _gc, get_wetter as _gw
+            _co = st.session_state.get(f"coords_{pid}")
+            if _co is None:
+                _co = _gc(anschrift) or False
+                st.session_state[f"coords_{pid}"] = _co
+            if _co:
+                w_cached = _gw(_co[0], _co[1])
+                st.session_state[f"wetter_{pid}"] = w_cached
+        except Exception:
+            pass
     if w_cached.get("ok"):
-        wetter_vorausgefuellt = f"{w_cached['temp']} °C, {w_cached['beschreibung']}, Wind {w_cached['wind']} km/h"
+        wetter_vorausgefuellt = (
+            f"{w_cached['temp']} °C, {w_cached['beschreibung']}, "
+            f"Wind {w_cached['wind']} km/h, Niederschlag {w_cached['niederschlag']} mm"
+        )
+
+    if w_cached.get("ok"):
+        st.markdown(
+            f"<div style='background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;"
+            f"padding:7px 13px;font-size:0.82rem;color:#166534;margin-bottom:0.7rem;'>"
+            f"☀ Wetter automatisch ermittelt für <b>{html_mod.escape(anschrift)}</b> "
+            f"(heute) — wird unten vorausgefüllt und ist editierbar.</div>",
+            unsafe_allow_html=True
+        )
+    elif anschrift:
+        st.markdown(
+            "<div style='background:#FFF7ED;border:1px solid #fed7aa;border-radius:8px;"
+            "padding:7px 13px;font-size:0.82rem;color:#9a3412;margin-bottom:0.7rem;'>"
+            "Wetter konnte für die Adresse nicht ermittelt werden — bitte Wetter unten manuell eintragen "
+            "oder die Baustellen-Adresse (PLZ + Ort) vervollständigen.</div>",
+            unsafe_allow_html=True
+        )
 
     with st.container(border=True):
         col_ba, col_bb = st.columns(2)
         with col_ba:
-            bericht_datum = st.date_input("Datum", value=datetime.date.today(), format="DD.MM.YYYY", key="bericht_datum")
+            bericht_datum = st.date_input("Datum", value=datetime.date.today(), format="DD.MM.YYYY", key=f"bericht_datum_{pid}")
         with col_bb:
             bericht_wetter = st.text_input(
-                "Wetter",
+                "Wetter (automatisch · aus Baustellen-Adresse)",
                 value=wetter_vorausgefuellt,
                 placeholder="z.B. 18 °C, bewölkt, Wind 10 km/h",
-                key="bericht_wetter"
+                key=f"bericht_wetter_{pid}"
             )
         col_bc, col_bd = st.columns(2)
         with col_bc:
@@ -1400,37 +1502,37 @@ with tab_bericht:
                 "Bauleiter",
                 value=get_name(),
                 placeholder="Vor- und Nachname",
-                key="bericht_bauleiter"
+                key=f"bericht_bauleiter_{pid}"
             )
         with col_bd:
             bericht_ag = st.text_input(
                 "Auftraggeber",
                 value=projekt.get("auftraggeber",""),
                 placeholder="z.B. Stadtwerke Konstanz GmbH",
-                key="bericht_ag"
+                key=f"bericht_ag_{pid}"
             )
 
         bericht_erledigt = st.text_area(
             "Was wurde heute erledigt?",
             height=100,
             placeholder="z.B. Erdaushub Achse A fertiggestellt, Fundamente A1–A4 betoniert...",
-            key="bericht_erledigt"
+            key=f"bericht_erledigt_{pid}"
         )
         bericht_probleme = st.text_area(
             "Aufgetretene Probleme / Behinderungen",
             height=80,
             placeholder="z.B. Materiallieferung verzögert, Baggerausfall 2h...",
-            key="bericht_probleme"
+            key=f"bericht_probleme_{pid}"
         )
         bericht_personal = st.text_area(
             "Anwesende Firmen / Personal",
             height=60,
             placeholder="z.B. Erdbau GmbH (4 Mann), Zimmerei Müller (2 Mann)...",
-            key="bericht_personal"
+            key=f"bericht_personal_{pid}"
         )
         bericht_fotos = st.file_uploader(
             "Foto-Anhang (optional)", type=["jpg","jpeg","png","webp"],
-            accept_multiple_files=True, key="bericht_fotos",
+            accept_multiple_files=True, key=f"bericht_fotos_{pid}",
             help="Fotos von der Baustelle — werden als Anhang ins Word-Dokument eingefügt"
         )
 
@@ -1467,6 +1569,9 @@ Stil: Sachlich, formell, vollständig. Auf Deutsch."""
                         "datum": str(bericht_datum),
                         "projekt": pname,
                         "titel": titel_tb,
+                        "bauleiter": bericht_bauleiter,
+                        "auftraggeber": bericht_ag,
+                        "wetter": bericht_wetter,
                         "bilder": [f.getvalue() for f in bericht_fotos] if bericht_fotos else [],
                     }
                     st.rerun()
@@ -1492,17 +1597,20 @@ Stil: Sachlich, formell, vollständig. Auf Deutsch."""
         with col_b1:
             st.download_button("Als .txt", data=bericht_result["text"],
                 file_name=f"{fname_tb}_{bericht_result['datum']}.txt",
-                mime="text/plain", use_container_width=True)
+                mime="text/plain", use_container_width=True, key=f"tb_txt_{pid}")
         with col_b2:
             try:
                 docx_b = _erstelle_docx(titel_tb,
-                    {"Projekt": pname, "Datum": bericht_result["datum"]},
+                    {"Projekt": pname, "Datum": bericht_result["datum"],
+                     "Bauleiter": bericht_result.get("bauleiter", ""),
+                     "Auftraggeber": bericht_result.get("auftraggeber", ""),
+                     "Wetter": bericht_result.get("wetter", "")},
                     bericht_result["text"],
                     bilder=bericht_result.get("bilder") or [])
                 st.download_button("Als Word (.docx)", data=docx_b,
                     file_name=f"{fname_tb}_{bericht_result['datum']}.docx",
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    use_container_width=True)
+                    use_container_width=True, key=f"tb_docx_{pid}")
             except Exception as ex:
                 st.error(f"Word-Fehler: {ex}")
         with col_b3:

@@ -3,7 +3,6 @@ Datenbankabstraktion: Supabase (primär) mit SQLite-Fallback (lokal).
 Falls Supabase-RLS oder Netzwerkprobleme → SQLite wird automatisch genutzt.
 """
 import sqlite3
-import json
 import uuid
 import datetime
 from pathlib import Path
