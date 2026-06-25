@@ -1107,21 +1107,37 @@ with tab_vob:
             pbdr.append(bottom); pPr.append(pbdr)
             return p
 
-        # ── Empfänger-Adressblock (AG-Anschrift, oben wie im Geschäftsbrief) ──
+        # ── Brief-Kopf nach DIN 5008: Absenderzeile · Empfänger-Anschriftenfeld · Ort/Datum ──
         if empfaenger and empfaenger.strip():
+            _grey = RGBColor(0x80, 0x80, 0x80)
+            # kleine Absenderzeile über dem Anschriftenfeld (R·APP + Bauleiter-Login-Name)
+            _bl = (meta.get("Bauleiter") or "").strip()
+            _absender = "R·APP Bauleitung Digital" + (f"   ·   {_bl}, Bauleiter" if _bl else "")
+            _p(_absender, size=8, color=_grey, space_after=16)
+            # Empfänger-Anschriftenfeld (normale Brief-Größe, eng untereinander)
             for _z in empfaenger.strip().split("\n"):
                 _z = _z.strip()
                 if _z:
-                    _p(_z, size=10, space_after=0)
-            _p("", space_after=14)
+                    _p(_z, size=10.5, space_after=0)
+            # Ort/Datum rechtsbündig (Brief-Konvention)
+            _datum = (meta.get("Datum") or "").strip()
+            if _datum:
+                try:
+                    import datetime as _dt_b
+                    _datum = _dt_b.date.fromisoformat(_datum).strftime("%d.%m.%Y")
+                except Exception:
+                    pass
+                _p(_datum, size=10.5, align=WD_ALIGN_PARAGRAPH.RIGHT, space_before=18, space_after=14)
+            else:
+                _p("", space_after=16)
 
         # ── Titel + Akzentlinie ───────────────────────────────
         _p(titel_dok, bold=True, size=17, color=DARK,
            align=WD_ALIGN_PARAGRAPH.LEFT, space_after=2)
         _hr(color="F07030", sz="18", space_after=8, space_before=0)   # kräftige Orange-Linie
 
-        # ── Metadaten-Block: 2-spaltig (kompakt, Infos links/rechts) ──
-        meta_items = [(k, str(v)) for k, v in (meta or {}).items() if v]
+        # ── Metadaten-Block: 2-spaltig (nur ohne Briefkopf; bei Briefen stehen Infos oben) ──
+        meta_items = [] if (empfaenger and empfaenger.strip()) else [(k, str(v)) for k, v in (meta or {}).items() if v]
         if meta_items:
             import math as _math
             rows_n = _math.ceil(len(meta_items) / 2)
@@ -1393,7 +1409,7 @@ Format: vollständiger Geschäftsbrief, kein Markdown."""
 
         _ergebnis_anzeigen(f"mk_{pid}", "Mehrkostenanzeige",
                            {"Projekt": pname, "Bauleiter": _vob_bauleiter, "Auftraggeber": mk_ag, "Datum": str(mk_datum)},
-                           empfaenger=projekt.get("auftraggeber_anschrift", ""))
+                           empfaenger="\n".join(x for x in [(mk_ag or "").strip(), projekt.get("auftraggeber_anschrift", "").strip()] if x))
 
         # Archiv Mehrkostenanzeigen
         _zeige_archiv("mehrkostenanzeige", "Mehrkostenanzeige")
@@ -1497,7 +1513,7 @@ Format: vollständiger Geschäftsbrief, kein Markdown."""
 
         _ergebnis_anzeigen(f"bh_{pid}", "Behinderungsanzeige",
                            {"Projekt": pname, "Bauleiter": _vob_bauleiter, "Auftraggeber": bh_ag, "Datum": str(bh_datum)},
-                           empfaenger=projekt.get("auftraggeber_anschrift", ""))
+                           empfaenger="\n".join(x for x in [(bh_ag or "").strip(), projekt.get("auftraggeber_anschrift", "").strip()] if x))
 
         # Archiv Behinderungsanzeigen
         _zeige_archiv("behinderungsanzeige", "Behinderungsanzeige")
