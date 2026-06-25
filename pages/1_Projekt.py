@@ -5,13 +5,18 @@ import html as html_mod
 from utils.config import get_config, get_name
 
 def _ki_call(prompt: str) -> str:
-    api_key = get_config("GEMINI_API_KEY")
+    # KI über Groq (Llama 3.3 70B) — stabiler Schlüssel, großzügige Limits
+    api_key = get_config("GROQ_API_KEY")
     if not api_key:
-        raise ValueError("Kein GEMINI_API_KEY gesetzt.")
-    from google import genai
-    client = genai.Client(api_key=api_key)
-    resp = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-    return resp.text
+        raise ValueError("Kein GROQ_API_KEY gesetzt.")
+    from groq import Groq
+    client = Groq(api_key=api_key)
+    resp = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.4,
+    )
+    return resp.choices[0].message.content
 
 try:
     from streamlit_calendar import calendar as st_calendar
@@ -760,8 +765,8 @@ Antworte auf Deutsch, kurz, §-Angabe bei Rechtsfragen, JA/NEIN + Begründung.""
                         st.session_state[key_verlauf].append({"rolle": "assistant", "text": antwort})
                     except Exception as e:
                         err = str(e)
-                        if "GEMINI_API_KEY" in err or "401" in err or "invalid_api_key" in err.lower() or "API_KEY_INVALID" in err:
-                            st.error("**API-Key ungültig** — Bitte GEMINI_API_KEY in den Streamlit Secrets prüfen.")
+                        if "GROQ_API_KEY" in err or "401" in err or "invalid_api_key" in err.lower() or "API_KEY_INVALID" in err:
+                            st.error("**API-Key ungültig** — Bitte GROQ_API_KEY in den Streamlit Secrets prüfen.")
                         elif "429" in err or "rate_limit" in err.lower():
                             st.session_state[rate_key] = _time.time()
                             st.warning(
@@ -1133,10 +1138,57 @@ with tab_vob:
 
         # ── Fließtext im Blocksatz, mit Überschriften-Hierarchie ──
         text = _re_md.sub(r'\n{3,}', '\n\n', text.strip())
-        for zeile in text.split("\n"):
-            z = zeile.strip()
+        _lines = text.split("\n")
+
+        def _is_trow(s):
+            s = s.strip()
+            return s.startswith("|") and s.count("|") >= 2
+
+        def _is_sep(s):
+            s = s.strip()
+            return _is_trow(s) and "-" in s and set(s.replace("|", "").replace(":", "").strip()) <= set("- ")
+
+        _i = 0
+        while _i < len(_lines):
+            z = _lines[_i].strip()
             if not z:
+                _i += 1
                 continue
+            # ── Markdown-Tabelle (Kopfzeile + |---|---| Trennzeile) → echte Word-Tabelle ──
+            if _is_trow(z) and _i + 1 < len(_lines) and _is_sep(_lines[_i + 1]):
+                header = [c.strip() for c in z.strip().strip("|").split("|")]
+                body_rows = []
+                _j = _i + 2
+                while _j < len(_lines) and _is_trow(_lines[_j]) and not _is_sep(_lines[_j]):
+                    body_rows.append([c.strip() for c in _lines[_j].strip().strip("|").split("|")])
+                    _j += 1
+                ncol = max([len(header)] + [len(r) for r in body_rows])
+                tbl = doc.add_table(rows=1 + len(body_rows), cols=ncol)
+                try:
+                    tbl.style = "Table Grid"
+                except Exception:
+                    pass
+                # Explizite Rahmen (zuverlässig in jeder Word-Version)
+                _tblPr = tbl._tbl.tblPr
+                _bdr = OxmlElement('w:tblBorders')
+                for _edge in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
+                    _e = OxmlElement('w:' + _edge)
+                    _e.set(_qn('w:val'), 'single'); _e.set(_qn('w:sz'), '4')
+                    _e.set(_qn('w:space'), '0'); _e.set(_qn('w:color'), '999999')
+                    _bdr.append(_e)
+                _tblPr.append(_bdr)
+                for c in range(ncol):
+                    para = tbl.rows[0].cells[c].paragraphs[0]
+                    rr = para.add_run(header[c] if c < len(header) else "")
+                    rr.bold = True; rr.font.size = Pt(9.5); rr.font.color.rgb = DARK
+                for ri, row in enumerate(body_rows, 1):
+                    for c in range(ncol):
+                        para = tbl.rows[ri].cells[c].paragraphs[0]
+                        para.add_run(row[c] if c < len(row) else "").font.size = Pt(9.5)
+                _p("", space_after=6)
+                _i = _j
+                continue
+            # ── normale Zeilen ──
             if z.startswith("## "):
                 _p(z[3:], bold=True, size=12, color=DARK, space_before=10, space_after=3)
             elif z.startswith("# "):
@@ -1145,11 +1197,12 @@ with tab_vob:
                 p2 = doc.add_paragraph()
                 p2.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
                 p2.paragraph_format.space_after = Pt(6)
-                for _i, _part in enumerate(_re_md.split(r'\*\*(.+?)\*\*', z)):
+                for _k, _part in enumerate(_re_md.split(r'\*\*(.+?)\*\*', z)):
                     if _part:
-                        p2.add_run(_part).bold = (_i % 2 == 1)
+                        p2.add_run(_part).bold = (_k % 2 == 1)
             else:
                 _p(z, align=WD_ALIGN_PARAGRAPH.JUSTIFY, space_after=6)
+            _i += 1
 
         # ── Unterschriftenzeile (zweispaltig, sauber) ─────────
         _hr(color="D9D9D9", sz="6", space_after=20, space_before=14)
@@ -1176,8 +1229,8 @@ with tab_vob:
 
     def _ki_fehler(e):
         err = str(e)
-        if "GEMINI_API_KEY" in err or "401" in err or "invalid_api_key" in err.lower() or "API_KEY_INVALID" in err:
-            st.error("**API-Key ungültig** — Bitte GEMINI_API_KEY in den Streamlit Secrets prüfen.")
+        if "GROQ_API_KEY" in err or "401" in err or "invalid_api_key" in err.lower() or "API_KEY_INVALID" in err:
+            st.error("**API-Key ungültig** — Bitte GROQ_API_KEY in den Streamlit Secrets prüfen.")
         elif "429" in err or "rate_limit" in err.lower():
             st.warning("KI-Limit erreicht — Bitte 1 Minute warten und erneut versuchen.")
         else:
@@ -1571,6 +1624,12 @@ Erstelle einen formalen Bautagesbericht mit:
 4. Personalstärke / anwesende Firmen
 5. Maßnahmen und nächste Schritte
 
+WICHTIG zur Formatierung:
+- Nutze für die anwesenden Firmen/Personalstärke eine Markdown-Tabelle mit den Spalten | Firma | Gewerk | Mannstärke |.
+- Nutze für die ausgeführten Arbeiten eine Markdown-Tabelle mit den Spalten | Gewerk | Tätigkeit | Status |.
+- Markdown-Tabellen exakt so: Kopfzeile mit |, darunter Trennzeile |---|---|---|, dann die Datenzeilen.
+- Abschnitts-Überschriften mit "## " voranstellen. Fließtext (Probleme, Maßnahmen) als normale Absätze.
+
 Stil: Sachlich, formell, vollständig. Auf Deutsch."""
                     antwort = _ki_call(prompt)
                     nr = get_naechste_nummer("tagesbericht")
@@ -1590,8 +1649,8 @@ Stil: Sachlich, formell, vollständig. Auf Deutsch."""
                     st.rerun()
                 except Exception as e:
                     err = str(e)
-                    if "GEMINI_API_KEY" in err or "401" in err or "invalid_api_key" in err.lower() or "API_KEY_INVALID" in err:
-                        st.error("**API-Key ungültig** — Bitte GEMINI_API_KEY in den Streamlit Secrets prüfen.")
+                    if "GROQ_API_KEY" in err or "401" in err or "invalid_api_key" in err.lower() or "API_KEY_INVALID" in err:
+                        st.error("**API-Key ungültig** — Bitte GROQ_API_KEY in den Streamlit Secrets prüfen.")
                     elif "429" in err or "rate_limit" in err.lower():
                         st.warning("KI-Limit erreicht — Bitte 1 Minute warten und erneut versuchen.")
                     else:
